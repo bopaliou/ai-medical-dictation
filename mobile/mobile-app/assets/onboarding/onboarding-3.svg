@@ -1,0 +1,98 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E6F4FE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F0F9FF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="docGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F8F9FA;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="0" dy="4" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#bgGrad3)"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="200" cy="200" r="100" fill="#34C759" fill-opacity="0.08"/>
+  <circle cx="824" cy="824" r="120" fill="#007AFF" fill-opacity="0.08"/>
+  
+  <!-- Premium PDF Document -->
+  <g transform="translate(262, 162)" filter="url(#shadow)">
+    <!-- Document -->
+    <rect x="0" y="0" width="500" height="700" rx="32" fill="url(#docGrad)" stroke="#E5E5EA" stroke-width="4"/>
+    
+    <!-- Document header -->
+    <rect x="0" y="0" width="500" height="120" rx="32" fill="#007AFF"/>
+    <rect x="40" y="40" width="120" height="40" rx="8" fill="#FFFFFF" fill-opacity="0.3"/>
+    <rect x="180" y="50" width="200" height="20" rx="4" fill="#FFFFFF" fill-opacity="0.8"/>
+    
+    <!-- Document content lines -->
+    <rect x="40" y="160" width="420" height="24" rx="6" fill="#E5E5EA"/>
+    <rect x="40" y="220" width="380" height="20" rx="4" fill="#F2F2F7"/>
+    <rect x="40" y="260" width="400" height="20" rx="4" fill="#F2F2F7"/>
+    <rect x="40" y="300" width="360" height="20" rx="4" fill="#F2F2F7"/>
+    
+    <!-- Medical data section -->
+    <rect x="40" y="360" width="420" height="120" rx="12" fill="#E6F4FE"/>
+    <rect x="60" y="380" width="80" height="16" rx="4" fill="#007AFF" fill-opacity="0.3"/>
+    <rect x="60" y="420" width="100" height="16" rx="4" fill="#007AFF" fill-opacity="0.2"/>
+    <rect x="60" y="450" width="90" height="16" rx="4" fill="#007AFF" fill-opacity="0.2"/>
+    
+    <!-- PDF icon badge -->
+    <circle cx="450" cy="80" r="30" fill="#FF3B30"/>
+    <text x="450" y="92" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#FFFFFF" text-anchor="middle">PDF</text>
+  </g>
+  
+  <!-- Stethoscope (modern, premium) -->
+  <g transform="translate(200, 700)">
+    <!-- Chest piece -->
+    <circle cx="0" cy="0" r="50" fill="#3A3A3C"/>
+    <circle cx="0" cy="0" r="35" fill="#1C1C1E"/>
+    
+    <!-- Tubing -->
+    <path d="M0 50 Q100 150 200 200 Q300 250 400 300 Q500 350 600 400" 
+          stroke="#8E8E93" stroke-width="20" fill="none" stroke-linecap="round"/>
+    
+    <!-- Earpieces -->
+    <circle cx="600" cy="400" r="25" fill="#3A3A3C"/>
+    <circle cx="650" cy="420" r="25" fill="#3A3A3C"/>
+  </g>
+  
+  <!-- Success Checkmark (premium, animated style) -->
+  <g transform="translate(700, 200)">
+    <circle cx="0" cy="0" r="100" fill="#34C759" fill-opacity="0.15"/>
+    <circle cx="0" cy="0" r="80" fill="#34C759"/>
+    <path d="M-30 -10 L-5 20 L30 -20" 
+          stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  
+  <!-- Quality indicators -->
+  <g>
+    <!-- Shield icon (reliability) -->
+    <g transform="translate(150, 500)">
+      <path d="M0 0 L40 -30 L80 0 L80 40 L40 80 L0 40 Z" fill="#007AFF" fill-opacity="0.2"/>
+      <path d="M0 0 L40 -30 L80 0 L80 40 L40 80 L0 40 Z" stroke="#007AFF" stroke-width="3" fill="none"/>
+      <circle cx="40" cy="30" r="15" fill="#007AFF"/>
+    </g>
+    
+    <!-- Star icon (excellence) -->
+    <g transform="translate(874, 500)">
+      <path d="M40 0 L48 28 L76 28 L52 44 L60 72 L40 56 L20 72 L28 44 L4 28 L32 28 Z" 
+            fill="#FF9500" fill-opacity="0.2"/>
+      <path d="M40 0 L48 28 L76 28 L52 44 L60 72 L40 56 L20 72 L28 44 L4 28 L32 28 Z" 
+            stroke="#FF9500" stroke-width="3" fill="none"/>
+    </g>
+  </g>
+</svg>
