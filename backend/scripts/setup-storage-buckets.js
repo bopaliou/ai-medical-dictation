@@ -50,7 +50,7 @@ async function createBucketIfNotExists(bucketName, options = {}) {
     // Créer le bucket
     console.log(`📦 Création du bucket '${bucketName}'...`);
     const { data, error } = await supabase.storage.createBucket(bucketName, {
-      public: options.public !== false, // Par défaut public pour permettre l'accès aux fichiers
+      public: options.public === true, // Explicitement défini (par défaut false/privé)
       fileSizeLimit: options.fileSizeLimit || 52428800, // 50 MB par défaut
       allowedMimeTypes: options.allowedMimeTypes || null, // Tous les types autorisés par défaut
     });
@@ -110,7 +110,7 @@ async function setupStorageBuckets() {
     // Créer le bucket audio
     console.log('1️⃣  Configuration du bucket audio...');
     const audioCreated = await createBucketIfNotExists(BUCKET_AUDIO, {
-      public: true,
+      public: true, // PUBLIC pour permettre l'accès direct aux fichiers
       fileSizeLimit: 104857600, // 100 MB pour les fichiers audio
       allowedMimeTypes: ['audio/wav', 'audio/mpeg', 'audio/m4a', 'audio/flac', 'audio/ogg']
     });
@@ -123,7 +123,7 @@ async function setupStorageBuckets() {
     // Créer le bucket PDFs
     console.log('2️⃣  Configuration du bucket PDFs...');
     const pdfsCreated = await createBucketIfNotExists(BUCKET_PDFS, {
-      public: true,
+      public: true, // PUBLIC pour permettre l'accès direct aux PDFs
       fileSizeLimit: 10485760, // 10 MB pour les PDFs
       allowedMimeTypes: ['application/pdf']
     });

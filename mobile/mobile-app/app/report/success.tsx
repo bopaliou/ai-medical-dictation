@@ -1,5 +1,5 @@
 /**
- * Écran Success - Affichage premium après génération d'un rapport PDF
+ * Écran de Succès - Affichage premium après génération d'un rapport PDF
  * Design iOS-grade avec toutes les actions PDF disponibles
  */
 
@@ -22,8 +22,8 @@ import { Animated } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
-import { reportApiService } from '@/services/reportApi';
+import * as FileSystem from 'expo-file-system/legacy';
+import { reportApiService, ReportDetails } from '@/services/reportApi';
 import { API_CONFIG } from '@/config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -39,8 +39,38 @@ export default function SuccessScreen() {
 
   // États
   const [isLoading, setIsLoading] = useState(false);
+  const [reportDetails, setReportDetails] = useState<ReportDetails | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(true);
   const [scaleAnim] = useState(new Animated.Value(0));
   const [checkOpacity] = useState(new Animated.Value(0));
+
+  // Récupérer les détails du rapport pour afficher les informations patient complètes
+  useEffect(() => {
+    const fetchReportDetails = async () => {
+      if (!reportId) {
+        setIsLoadingDetails(false);
+        return;
+      }
+
+      try {
+        console.log('📋 Récupération des détails du rapport pour afficher les infos patient:', reportId);
+        const details = await reportApiService.getReportDetails(reportId);
+        setReportDetails(details);
+        console.log('✅ Détails du rapport récupérés:', {
+          patient: details.patient?.full_name || '(vide)',
+          age: details.patient?.age || '(vide)',
+          gender: details.patient?.gender || '(vide)'
+        });
+      } catch (error: any) {
+        console.error('❌ Erreur lors de la récupération des détails:', error);
+        // Ne pas bloquer l'affichage si la récupération échoue
+      } finally {
+        setIsLoadingDetails(false);
+      }
+    };
+
+    fetchReportDetails();
+  }, [reportId]);
 
   // Animation d'entrée
   useEffect(() => {
@@ -246,7 +276,7 @@ export default function SuccessScreen() {
   };
 
   /**
-   * Retour au dashboard
+   * Retour au tableau de bord
    */
   const handleBackToDashboard = () => {
     router.replace('/(tabs)');
@@ -287,23 +317,75 @@ export default function SuccessScreen() {
 
           {/* Carte d'information */}
           <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <Ionicons name="person-outline" size={20} color="#8E8E93" />
-              <Text style={styles.infoLabel}>Patient :</Text>
-              <Text style={styles.infoValue}>{patientName || 'Non spécifié'}</Text>
-            </View>
+            {isLoadingDetails ? (
+              <View style={styles.loadingInfo}>
+                <ActivityIndicator size="small" color="#006CFF" />
+                <Text style={styles.loadingInfoText}>Chargement des informations...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Nom du patient */}
+                <View style={styles.infoRow}>
+                  <Ionicons name="person-outline" size={20} color="#8E8E93" />
+                  <Text style={styles.infoLabel}>Nom complet :</Text>
+                  <Text style={styles.infoValue}>
+                    {reportDetails?.patient?.full_name || patientName || 'Non spécifié'}
+                  </Text>
+                </View>
 
-            <View style={styles.infoRow}>
-              <Ionicons name="calendar-outline" size={20} color="#8E8E93" />
-              <Text style={styles.infoLabel}>Date :</Text>
-              <Text style={styles.infoValue}>{formatDate(createdAt)}</Text>
-            </View>
+                {/* Âge */}
+                {reportDetails?.patient?.age && (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="time-outline" size={20} color="#8E8E93" />
+                    <Text style={styles.infoLabel}>Âge :</Text>
+                    <Text style={styles.infoValue}>{reportDetails.patient.age}</Text>
+                  </View>
+                )}
 
-            <View style={styles.infoRow}>
-              <Ionicons name="document-text-outline" size={20} color="#8E8E93" />
-              <Text style={styles.infoLabel}>Type :</Text>
-              <Text style={styles.infoValue}>SOAPIE</Text>
-            </View>
+                {/* Sexe */}
+                {reportDetails?.patient?.gender && (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="person-circle-outline" size={20} color="#8E8E93" />
+                    <Text style={styles.infoLabel}>Sexe :</Text>
+                    <Text style={styles.infoValue}>{reportDetails.patient.gender}</Text>
+                  </View>
+                )}
+
+                {/* Chambre */}
+                {reportDetails?.patient?.room_number && (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="bed-outline" size={20} color="#8E8E93" />
+                    <Text style={styles.infoLabel}>Chambre :</Text>
+                    <Text style={styles.infoValue}>{reportDetails.patient.room_number}</Text>
+                  </View>
+                )}
+
+                {/* Unité / Service */}
+                {reportDetails?.patient?.unit && (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="business-outline" size={20} color="#8E8E93" />
+                    <Text style={styles.infoLabel}>Unité / Service :</Text>
+                    <Text style={styles.infoValue}>{reportDetails.patient.unit}</Text>
+                  </View>
+                )}
+
+                {/* Date */}
+                <View style={styles.infoRow}>
+                  <Ionicons name="calendar-outline" size={20} color="#8E8E93" />
+                  <Text style={styles.infoLabel}>Date :</Text>
+                  <Text style={styles.infoValue}>
+                    {formatDate(reportDetails?.created_at || createdAt)}
+                  </Text>
+                </View>
+
+                {/* Type */}
+                <View style={styles.infoRow}>
+                  <Ionicons name="document-text-outline" size={20} color="#8E8E93" />
+                  <Text style={styles.infoLabel}>Type :</Text>
+                  <Text style={styles.infoValue}>SOAPIE</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -381,7 +463,7 @@ export default function SuccessScreen() {
           onPress={handleBackToDashboard}
           activeOpacity={0.7}
         >
-          <Text style={styles.backButtonText}>Retour au dashboard</Text>
+          <Text style={styles.backButtonText}>Retour au tableau de bord</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -552,5 +634,16 @@ const styles = StyleSheet.create({
     color: '#006CFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  loadingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
+  },
+  loadingInfoText: {
+    fontSize: 15,
+    color: '#8E8E93',
   },
 });

@@ -1,6 +1,7 @@
 /**
- * Écran PDF Viewer - Visualisation d'un PDF en plein écran
- * Design premium iOS avec actions complètes
+ * PDFPreviewScreen - Écran de visualisation PDF complet
+ * Design premium iOS moderne avec toutes les actions nécessaires
+ * Compatible Expo Router
  */
 
 import React, { useState, useRef } from 'react';
@@ -13,6 +14,7 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -22,23 +24,25 @@ import { WebView } from 'react-native-webview';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { reportApiService } from '@/services/reportApi';
 
-export default function PDFViewerScreen() {
+export default function PDFPreviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const webViewRef = useRef<WebView>(null);
 
-  // Paramètres reçus
-  const pdfUrl = params.pdf_url || params.pdfUrl as string;
-  const reportId = params.report_id || params.reportId as string;
+  // Paramètres reçus via expo-router
+  const initialPdfUrl = (params.pdf_url || params.pdfUrl) as string;
+  const reportId = (params.report_id || params.reportId) as string;
 
   // États
+  const [pdfUrl, setPdfUrl] = useState<string>(initialPdfUrl);
   const [isLoading, setIsLoading] = useState(true);
   const [pdfLoaded, setPdfLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Vérifier les paramètres requis
   React.useEffect(() => {
@@ -59,14 +63,46 @@ export default function PDFViewerScreen() {
     setPdfLoaded(true);
   };
 
-  const handleError = (syntheticEvent: any) => {
+  const handleError = async (syntheticEvent: any) => {
     const { nativeEvent } = syntheticEvent;
     console.error('Erreur WebView:', nativeEvent);
-    setIsLoading(false);
-    setError('Impossible de charger le PDF');
+    
+    // Si l'erreur est liée au bucket (404), essayer de régénérer l'URL (publique ou signée)
+    if (nativeEvent?.description?.includes('404') || nativeEvent?.description?.includes('Bucket Not found') || nativeEvent?.description?.includes('Bucket not found')) {
+      console.log('🔄 Erreur 404 détectée, tentative de régénération de l\'URL...');
+      
+      if (reportId) {
+        try {
+          setIsLoading(true);
+          const newSignedUrl = await reportApiService.regenerateSignedUrl(reportId);
+          console.log('✅ Nouvelle URL obtenue, rechargement du PDF...');
+          
+          // Mettre à jour l'URL et recharger
+          setPdfUrl(newSignedUrl);
+          setError(null);
+          
+          // Recharger le WebView avec la nouvelle URL
+          if (webViewRef.current) {
+            webViewRef.current.reload();
+          }
+        } catch (regenerateError: any) {
+          console.error('❌ Erreur lors de la régénération de l\'URL:', regenerateError);
+          setIsLoading(false);
+          setError('Impossible de charger le PDF. Erreur: ' + (regenerateError.message || 'URL invalide'));
+        }
+      } else {
+        setIsLoading(false);
+        setError('Impossible de charger le PDF. Bucket non trouvé.');
+      }
+    } else {
+      setIsLoading(false);
+      setError('Impossible de charger le PDF');
+    }
   };
 
-  // Partager le PDF
+  /**
+   * Partager le PDF
+   */
   const handleSharePDF = async () => {
     if (!pdfUrl) {
       Alert.alert('Erreur', 'URL du PDF non disponible');
@@ -74,34 +110,55 @@ export default function PDFViewerScreen() {
     }
 
     try {
-      setIsLoading(true);
+      setIsActionLoading(true);
+      console.log('📤 Partage du PDF:', pdfUrl);
+      
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Information', 'Le partage n\'est pas disponible sur cet appareil');
         return;
       }
 
-      const fileUri = FileSystem.documentDirectory + `report-${Date.now()}.pdf`;
+      // Télécharger le PDF temporairement pour le partage
+      const fileName = `rapport-${Date.now()}.pdf`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      
+      console.log('📥 Téléchargement du PDF pour partage...');
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
-      if (downloadResult.status === 200) {
+      console.log('📥 Résultat du téléchargement:', {
+        status: downloadResult.status,
+        uri: downloadResult.uri,
+      });
+
+      if (downloadResult.status === 200 && downloadResult.uri) {
+        console.log('📤 Partage du fichier:', downloadResult.uri);
         await Sharing.shareAsync(downloadResult.uri, {
           mimeType: 'application/pdf',
           dialogTitle: 'Partager le rapport PDF',
+          UTI: 'com.adobe.pdf', // Type uniforme pour iOS
         });
+        console.log('✅ Partage réussi');
       } else {
-        throw new Error('Échec du téléchargement du PDF');
+        throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
       }
     } catch (error: any) {
-      console.error('Erreur lors du partage:', error);
-      Alert.alert('Erreur', 'Impossible de partager le PDF. Vérifiez votre connexion.');
+      console.error('❌ Erreur lors du partage:', error);
+      Alert.alert(
+        'Erreur',
+        error.message?.includes('téléchargement') 
+          ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
+          : 'Impossible de partager le PDF. Vérifiez votre connexion.'
+      );
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
       setShowActionsMenu(false);
     }
   };
 
-  // Ouvrir dans le navigateur
+  /**
+   * Ouvrir le PDF dans le navigateur externe
+   */
   const handleOpenInBrowser = async () => {
     if (!pdfUrl) {
       Alert.alert('Erreur', 'URL du PDF non disponible');
@@ -109,17 +166,27 @@ export default function PDFViewerScreen() {
     }
 
     try {
+      setIsActionLoading(true);
+      console.log('🌐 Ouverture du PDF dans le navigateur:', pdfUrl);
+      
       await WebBrowser.openBrowserAsync(pdfUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        controlsColor: '#006CFF',
       });
+      
+      console.log('✅ PDF ouvert dans le navigateur');
       setShowActionsMenu(false);
     } catch (error: any) {
-      console.error('Erreur lors de l\'ouverture:', error);
+      console.error('❌ Erreur lors de l\'ouverture:', error);
       Alert.alert('Erreur', 'Impossible d\'ouvrir le PDF dans le navigateur');
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  // Imprimer le PDF
+  /**
+   * Imprimer le PDF via expo-print
+   */
   const handlePrintPDF = async () => {
     if (!pdfUrl) {
       Alert.alert('Erreur', 'URL du PDF non disponible');
@@ -127,34 +194,53 @@ export default function PDFViewerScreen() {
     }
 
     try {
-      setIsLoading(true);
+      setIsActionLoading(true);
+      console.log('🖨️ Impression du PDF:', pdfUrl);
+
       const isAvailable = await Print.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Information', 'L\'impression n\'est pas disponible sur cet appareil');
         return;
       }
 
-      const fileUri = FileSystem.documentDirectory + `report-print-${Date.now()}.pdf`;
+      // Télécharger le PDF temporairement pour l'impression
+      const fileName = `rapport-print-${Date.now()}.pdf`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      
+      console.log('📥 Téléchargement du PDF pour impression...');
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
-      if (downloadResult.status === 200) {
+      console.log('📥 Résultat du téléchargement:', {
+        status: downloadResult.status,
+        uri: downloadResult.uri,
+      });
+
+      if (downloadResult.status === 200 && downloadResult.uri) {
+        console.log('🖨️ Impression du fichier:', downloadResult.uri);
         await Print.printAsync({
           uri: downloadResult.uri,
-          html: '',
         });
+        console.log('✅ Impression lancée');
       } else {
-        throw new Error('Échec du téléchargement du PDF');
+        throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
       }
     } catch (error: any) {
-      console.error('Erreur lors de l\'impression:', error);
-      Alert.alert('Erreur', 'Impossible d\'imprimer le PDF. Vérifiez votre connexion.');
+      console.error('❌ Erreur lors de l\'impression:', error);
+      Alert.alert(
+        'Erreur',
+        error.message?.includes('téléchargement')
+          ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
+          : 'Impossible d\'imprimer le PDF. Vérifiez votre connexion.'
+      );
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
       setShowActionsMenu(false);
     }
   };
 
-  // Télécharger le PDF localement
+  /**
+   * Télécharger le PDF localement
+   */
   const handleDownloadPDF = async () => {
     if (!pdfUrl) {
       Alert.alert('Erreur', 'URL du PDF non disponible');
@@ -162,25 +248,47 @@ export default function PDFViewerScreen() {
     }
 
     try {
-      setIsLoading(true);
-      const fileUri = FileSystem.documentDirectory + `rapport-${Date.now()}.pdf`;
+      setIsActionLoading(true);
+      console.log('📥 Téléchargement du PDF:', pdfUrl);
+      
+      const fileName = `rapport-${Date.now()}.pdf`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      
+      console.log('📥 Destination:', fileUri);
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
-      if (downloadResult.status === 200) {
-        Alert.alert('Succès', `PDF téléchargé: ${fileUri}`, [{ text: 'OK' }]);
+      console.log('📥 Résultat du téléchargement:', {
+        status: downloadResult.status,
+        uri: downloadResult.uri,
+      });
+
+      if (downloadResult.status === 200 && downloadResult.uri) {
+        console.log('✅ PDF téléchargé avec succès:', downloadResult.uri);
+        Alert.alert(
+          'Succès',
+          'PDF téléchargé avec succès dans le dossier Documents',
+          [{ text: 'OK' }]
+        );
       } else {
-        throw new Error('Échec du téléchargement du PDF');
+        throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
       }
     } catch (error: any) {
-      console.error('Erreur lors du téléchargement:', error);
-      Alert.alert('Erreur', 'Impossible de télécharger le PDF. Vérifiez votre connexion.');
+      console.error('❌ Erreur lors du téléchargement:', error);
+      Alert.alert(
+        'Erreur',
+        error.message?.includes('téléchargement')
+          ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
+          : 'Impossible de télécharger le PDF. Vérifiez votre connexion.'
+      );
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
       setShowActionsMenu(false);
     }
   };
 
-  // Mettre en brouillon
+  /**
+   * Mettre le rapport en brouillon → PATCH /api/reports/:report_id { status: "draft" }
+   */
   const handleSaveAsDraft = async () => {
     if (!reportId) {
       Alert.alert('Erreur', 'ID du rapport non disponible');
@@ -188,8 +296,12 @@ export default function PDFViewerScreen() {
     }
 
     try {
-      setIsLoading(true);
+      setIsActionLoading(true);
+      console.log('📝 Mise en brouillon du rapport:', reportId);
+      
       await reportApiService.updateReportStatus(reportId, 'draft');
+      
+      console.log('✅ Rapport mis en brouillon');
       Alert.alert('Succès', 'Rapport mis en brouillon', [
         {
           text: 'OK',
@@ -200,14 +312,50 @@ export default function PDFViewerScreen() {
         },
       ]);
     } catch (error: any) {
-      console.error('Erreur lors de la mise en brouillon:', error);
+      console.error('❌ Erreur lors de la mise en brouillon:', error);
       Alert.alert('Erreur', error.message || 'Impossible de mettre le rapport en brouillon');
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   };
 
-  // Supprimer le rapport
+  /**
+   * Finaliser le rapport → PATCH /api/reports/:report_id { status: "final" }
+   */
+  const handleFinalize = async () => {
+    if (!reportId) {
+      Alert.alert('Erreur', 'ID du rapport non disponible');
+      return;
+    }
+
+    try {
+      setIsActionLoading(true);
+      console.log('✅ Finalisation du rapport:', reportId);
+      
+      await reportApiService.updateReportStatus(reportId, 'final');
+      
+      console.log('✅ Rapport finalisé');
+      Alert.alert('Succès', 'Rapport finalisé', [
+        {
+          text: 'OK',
+          onPress: () => {
+            setShowActionsMenu(false);
+            router.back();
+          },
+        },
+      ]);
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la finalisation:', error);
+      Alert.alert('Erreur', error.message || 'Impossible de finaliser le rapport');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  /**
+   * Supprimer le rapport → DELETE /api/reports/:report_id
+   * Redirige vers /reports après suppression
+   */
   const handleDeleteReport = () => {
     if (!reportId) {
       Alert.alert('Erreur', 'ID du rapport non disponible');
@@ -216,7 +364,7 @@ export default function PDFViewerScreen() {
 
     Alert.alert(
       'Supprimer le rapport',
-      'Êtes-vous sûr de vouloir supprimer définitivement ce rapport ?',
+      'Êtes-vous sûr de vouloir supprimer définitivement ce rapport ? Cette action supprimera aussi le PDF et l\'audio associés.',
       [
         {
           text: 'Annuler',
@@ -228,22 +376,27 @@ export default function PDFViewerScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              setIsLoading(true);
+              setIsActionLoading(true);
+              console.log('🗑️ Suppression du rapport:', reportId);
+              
               await reportApiService.deleteReport(reportId);
-              Alert.alert('Succès', 'Rapport supprimé', [
+              
+              console.log('✅ Rapport supprimé avec succès');
+              Alert.alert('Succès', 'Rapport supprimé définitivement', [
                 {
                   text: 'OK',
                   onPress: () => {
                     setShowActionsMenu(false);
+                    // Rediriger vers l'écran des rapports
                     router.replace('/(tabs)/rapports');
                   },
                 },
               ]);
             } catch (error: any) {
-              console.error('Erreur lors de la suppression:', error);
+              console.error('❌ Erreur lors de la suppression:', error);
               Alert.alert('Erreur', error.message || 'Impossible de supprimer le rapport');
             } finally {
-              setIsLoading(false);
+              setIsActionLoading(false);
             }
           },
         },
@@ -256,23 +409,42 @@ export default function PDFViewerScreen() {
     router.back();
   };
 
-  // HTML pour afficher le PDF dans WebView
-  const pdfHtml = `
+  // HTML optimisé pour afficher le PDF dans WebView
+  const pdfHtml = pdfUrl ? `
     <!DOCTYPE html>
     <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
           body {
             margin: 0;
             padding: 0;
             background-color: #000;
             overflow: hidden;
+            width: 100vw;
+            height: 100vh;
           }
           iframe {
             width: 100%;
             height: 100vh;
             border: none;
+            display: block;
+          }
+          .error {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            text-align: center;
+            padding: 20px;
           }
         </style>
       </head>
@@ -280,31 +452,46 @@ export default function PDFViewerScreen() {
         <iframe src="${pdfUrl}" type="application/pdf"></iframe>
       </body>
     </html>
-  `;
+  ` : '';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="light" />
 
-      {/* Header */}
+      {/* Header Premium iOS */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerButton}
           onPress={handleBack}
           activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Rapport PDF</Text>
+        <Text style={styles.headerTitle}>Aperçu PDF</Text>
 
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setShowActionsMenu(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleSharePDF}
+            activeOpacity={0.7}
+            disabled={isActionLoading}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="share-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => setShowActionsMenu(true)}
+            activeOpacity={0.7}
+            disabled={isActionLoading}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Zone PDF */}
@@ -333,19 +520,59 @@ export default function PDFViewerScreen() {
               <Text style={styles.retryButtonText}>Réessayer</Text>
             </TouchableOpacity>
           </View>
-        ) : (
+        ) : pdfUrl ? (
           <WebView
             ref={webViewRef}
-            source={{ uri: pdfUrl || '' }}
+            source={{ 
+              uri: pdfUrl,
+              headers: {
+                'Accept': 'application/pdf',
+              }
+            }}
             style={styles.webView}
             onLoadEnd={handleLoadEnd}
             onError={handleError}
+            onHttpError={async (syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
+              console.error('❌ Erreur HTTP WebView:', nativeEvent);
+              
+              // Si erreur 400 ou 404, essayer de régénérer l'URL signée
+              if ((nativeEvent.statusCode === 400 || nativeEvent.statusCode === 404) && reportId) {
+                console.log(`🔄 Erreur ${nativeEvent.statusCode} détectée, tentative de régénération de l'URL signée...`);
+                
+                try {
+                  setIsLoading(true);
+                  const newSignedUrl = await reportApiService.regenerateSignedUrl(reportId);
+                  console.log('✅ Nouvelle URL signée obtenue, rechargement du PDF...');
+                  
+                  // Mettre à jour l'URL et recharger
+                  setPdfUrl(newSignedUrl);
+                  setError(null);
+                  
+                  // Recharger le WebView avec la nouvelle URL
+                  if (webViewRef.current) {
+                    webViewRef.current.reload();
+                  }
+                } catch (regenerateError: any) {
+                  console.error('❌ Erreur lors de la régénération de l\'URL:', regenerateError);
+                  setIsLoading(false);
+                  setError(`Erreur ${nativeEvent.statusCode}: Impossible de charger le PDF. ${regenerateError.message || 'URL invalide'}`);
+                }
+              } else {
+                setIsLoading(false);
+                setError(`Erreur ${nativeEvent.statusCode}: Impossible de charger le PDF`);
+              }
+            }}
             startInLoadingState={true}
             scalesPageToFit={true}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
+            originWhitelist={['*']}
+            mixedContentMode="always"
+            cacheEnabled={true}
+            incognito={false}
             renderLoading={() => (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#FFFFFF" />
@@ -353,6 +580,12 @@ export default function PDFViewerScreen() {
               </View>
             )}
           />
+        ) : (
+          <View style={styles.errorContainer}>
+            <Ionicons name="document-outline" size={64} color="#8E8E93" />
+            <Text style={styles.errorTitle}>PDF non disponible</Text>
+            <Text style={styles.errorText}>L'URL du PDF n'a pas été fournie</Text>
+          </View>
         )}
       </View>
 
@@ -379,75 +612,108 @@ export default function PDFViewerScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.menuContent}>
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handleOpenInBrowser}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="open-outline" size={22} color="#006CFF" />
-                <Text style={styles.menuItemText}>Ouvrir dans le navigateur</Text>
-              </TouchableOpacity>
+            <ScrollView style={styles.menuContent} showsVerticalScrollIndicator={false}>
+              {/* Actions PDF */}
+              <View style={styles.menuSection}>
+                <Text style={styles.menuSectionTitle}>Actions PDF</Text>
+                
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleOpenInBrowser}
+                  activeOpacity={0.7}
+                  disabled={isActionLoading}
+                >
+                  <Ionicons name="open-outline" size={22} color="#006CFF" />
+                  <Text style={styles.menuItemText}>Ouvrir dans le navigateur</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handleSharePDF}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="share-outline" size={22} color="#006CFF" />
-                <Text style={styles.menuItemText}>Partager</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleSharePDF}
+                  activeOpacity={0.7}
+                  disabled={isActionLoading}
+                >
+                  <Ionicons name="share-outline" size={22} color="#006CFF" />
+                  <Text style={styles.menuItemText}>Partager</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handlePrintPDF}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="print-outline" size={22} color="#006CFF" />
-                <Text style={styles.menuItemText}>Imprimer</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handlePrintPDF}
+                  activeOpacity={0.7}
+                  disabled={isActionLoading}
+                >
+                  <Ionicons name="print-outline" size={22} color="#006CFF" />
+                  <Text style={styles.menuItemText}>Imprimer</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handleDownloadPDF}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="download-outline" size={22} color="#006CFF" />
-                <Text style={styles.menuItemText}>Télécharger</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleDownloadPDF}
+                  activeOpacity={0.7}
+                  disabled={isActionLoading}
+                >
+                  <Ionicons name="download-outline" size={22} color="#006CFF" />
+                  <Text style={styles.menuItemText}>Télécharger</Text>
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.menuDivider} />
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handleSaveAsDraft}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="save-outline" size={22} color="#8E8E93" />
-                <Text style={[styles.menuItemText, styles.menuItemTextSecondary]}>
-                  Mettre en brouillon
-                </Text>
-              </TouchableOpacity>
+              {/* Gestion du rapport */}
+              {reportId && (
+                <>
+                  <View style={styles.menuSection}>
+                    <Text style={styles.menuSectionTitle}>Gestion du rapport</Text>
+                    
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={handleSaveAsDraft}
+                      activeOpacity={0.7}
+                      disabled={isActionLoading}
+                    >
+                      <Ionicons name="document-text-outline" size={22} color="#8E8E93" />
+                      <Text style={[styles.menuItemText, styles.menuItemTextSecondary]}>
+                        Mettre en brouillon
+                      </Text>
+                    </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={handleDeleteReport}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={22} color="#FF3B30" />
-                <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>
-                  Supprimer
-                </Text>
-              </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={handleFinalize}
+                      activeOpacity={0.7}
+                      disabled={isActionLoading}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={22} color="#34C759" />
+                      <Text style={[styles.menuItemText, { color: '#34C759' }]}>
+                        Finaliser
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={handleDeleteReport}
+                      activeOpacity={0.7}
+                      disabled={isActionLoading}
+                    >
+                      <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+                      <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>
+                        Supprimer
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Overlay de chargement global */}
-      {isLoading && (
+      {/* Overlay de chargement global pour les actions */}
+      {isActionLoading && (
         <View style={styles.globalLoadingOverlay}>
           <ActivityIndicator size="large" color="#006CFF" />
+          <Text style={styles.loadingOverlayText}>Traitement en cours...</Text>
         </View>
       )}
     </SafeAreaView>
@@ -470,12 +736,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2C2C2E',
   },
   headerButton: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 22,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   headerTitle: {
     fontSize: 17,
@@ -604,10 +874,29 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+    gap: 12,
+  },
+  loadingOverlayText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  menuSection: {
+    paddingVertical: 8,
+  },
+  menuSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8E8E93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    marginBottom: 4,
   },
 });
 

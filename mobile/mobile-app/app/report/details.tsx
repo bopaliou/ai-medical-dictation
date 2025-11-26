@@ -22,7 +22,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { reportApiService, ReportDetails } from '@/services/reportApi';
 
 // Interface pour les détails du rapport
@@ -379,10 +379,11 @@ export default function ReportDetailsScreen() {
       setIsActionLoading(true);
       await reportApiService.updateReportStatus(report.id, newStatus);
       
-      // Rafraîchir les données
+      // Rafraîchir les données pour mettre à jour l'affichage des boutons
       await fetchReportDetails();
       
-      Alert.alert('Succès', `Rapport ${newStatus === 'draft' ? 'mis en brouillon' : newStatus === 'final' ? 'finalisé' : 'mis à la corbeille'} avec succès`);
+      // Ne pas afficher d'alerte pour éviter d'interrompre l'utilisateur
+      // Le changement de bouton sera visible immédiatement après le rafraîchissement
     } catch (error: any) {
       console.error('Erreur lors de la mise à jour du statut:', error);
       Alert.alert('Erreur', error.message || 'Impossible de mettre à jour le statut du rapport.');
@@ -407,6 +408,7 @@ export default function ReportDetailsScreen() {
         patient: report.patient,
         soapie: report.soapie,
       }),
+      patientData: JSON.stringify(report.patient), // Passer aussi patientData séparément pour compatibilité
     };
 
     if (report.patient_id) {
@@ -421,6 +423,8 @@ export default function ReportDetailsScreen() {
       note_id: report.id,
       patient_id: report.patient_id,
       has_soapie: !!report.soapie,
+      has_vitals: !!(report.soapie?.O?.vitals),
+      patient: report.patient,
     });
 
     router.push({

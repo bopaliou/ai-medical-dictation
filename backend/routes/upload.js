@@ -255,10 +255,16 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
       }
       
       console.log('✅ Structuration réussie');
-      console.log('Patient extrait:', structuredJson.patient?.full_name || '(non identifié)');
-      console.log('SOAPIE présent:', !!structuredJson.soapie);
-      console.log('Données patient présentes:', hasPatientData);
-      console.log('Données SOAPIE présentes:', hasSOAPIEData);
+      console.log('📋 Informations patient extraites de l\'audio:', {
+        full_name: structuredJson.patient?.full_name || '(non identifié)',
+        age: structuredJson.patient?.age || '(non spécifié)',
+        gender: structuredJson.patient?.gender || '(non spécifié)',
+        room_number: structuredJson.patient?.room_number || '(non spécifié)',
+        unit: structuredJson.patient?.unit || '(non spécifié)'
+      });
+      console.log('📋 SOAPIE présent:', !!structuredJson.soapie);
+      console.log('📋 Données patient présentes:', hasPatientData);
+      console.log('📋 Données SOAPIE présentes:', hasSOAPIEData);
     } catch (structError) {
       console.error('❌ Erreur lors de la structuration SOAPIE:', structError);
       

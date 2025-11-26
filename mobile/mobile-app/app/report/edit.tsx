@@ -1,5 +1,5 @@
 /**
- * Écran Edition Report - Design Premium iOS
+ * Écran Édition du Rapport - Design Premium iOS
  * Permet d'éditer les sections SOAPIE générées par l'IA après une dictée
  */
 
@@ -83,13 +83,21 @@ export default function ReportEditScreen() {
   const structuredJsonParam = params.structured_json ? JSON.parse(params.structured_json as string) : null;
 
   // Initialiser structuredJson avec patientData si disponible
+  // Toujours initialiser patient (même vide) pour permettre l'édition
   const [structuredJson, setStructuredJson] = useState<StructuredJson>({
-    patient: (patientData && patientData.full_name) ? patientData : undefined,
+    patient: patientData || structuredJsonParam?.patient || {
+      full_name: '',
+      age: '',
+      gender: '',
+      room_number: '',
+      unit: ''
+    },
     soapie: structuredJsonParam?.soapie || structuredJsonParam || {},
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isStructuringComplete, setIsStructuringComplete] = useState(false);
   const [transcription, setTranscription] = useState<string>('');
   const [noteId, setNoteId] = useState<string | null>(params.note_id as string || null);
 
@@ -107,6 +115,8 @@ export default function ReportEditScreen() {
       // Si structured_json est déjà fourni, l'utiliser
       if (structuredJsonParam) {
         console.log('📋 Utilisation du structured_json fourni');
+        console.log('📋 Structured JSON complet:', JSON.stringify(structuredJsonParam, null, 2));
+        
         // Fusionner : patientData a priorité si full_name existe
         let finalPatient = structuredJsonParam.patient || {};
         if (patientData && patientData.full_name && patientData.full_name.trim()) {
@@ -120,9 +130,28 @@ export default function ReportEditScreen() {
           };
         }
         
+        // Extraire les données SOAPIE en préservant toutes les sous-sections
+        const soapieData = structuredJsonParam.soapie || structuredJsonParam || {};
+        
+        // S'assurer que la section O contient toutes les sous-sections (vitals, exam, labs, medications)
+        const objectiveData = soapieData.O || {};
+        const finalObjective = {
+          vitals: objectiveData.vitals || {},
+          exam: objectiveData.exam || '',
+          labs: objectiveData.labs || '',
+          medications: Array.isArray(objectiveData.medications) ? objectiveData.medications : (objectiveData.medications || []),
+        };
+        
+        const finalSoapie = {
+          ...soapieData,
+          O: finalObjective,
+        };
+        
+        console.log('📋 SOAPIE final avec vitals:', JSON.stringify(finalSoapie, null, 2));
+        
         setStructuredJson({
           patient: finalPatient && Object.keys(finalPatient).length > 0 ? finalPatient : undefined,
-          soapie: structuredJsonParam.soapie || structuredJsonParam || {},
+          soapie: finalSoapie,
         });
         if (structuredJsonParam.transcription) {
           setTranscription(structuredJsonParam.transcription);
@@ -228,6 +257,8 @@ export default function ReportEditScreen() {
 
           console.log('✅ Données initialisées depuis l\'upload');
           setIsInitialized(true);
+          setIsStructuringComplete(true);
+          setIsUploading(false);
         } catch (error: any) {
           console.error('❌ Erreur lors de l\'upload automatique:', error);
           console.error('📡 Détails de l\'erreur:', {
@@ -331,7 +362,7 @@ export default function ReportEditScreen() {
     }));
   };
 
-  const updateObjectiveField = (field: 'exam' | 'labs' | 'medications', value: string | string[]) => {
+  const updateObjectiveField = (field: 'exam' | 'labs' | 'medications' | 'vitals', value: string | string[] | object) => {
     setStructuredJson((prev) => ({
       ...prev,
       soapie: {
@@ -340,6 +371,33 @@ export default function ReportEditScreen() {
           ...prev.soapie?.O,
           [field]: value,
         },
+      },
+    }));
+  };
+
+  const updateVitalField = (field: string, value: string) => {
+    setStructuredJson((prev) => ({
+      ...prev,
+      soapie: {
+        ...prev.soapie,
+        O: {
+          ...prev.soapie?.O,
+          vitals: {
+            ...prev.soapie?.O?.vitals,
+            [field]: value,
+          },
+        },
+      },
+    }));
+  };
+
+  // Fonction pour mettre à jour les informations patient
+  const updatePatientField = (field: 'full_name' | 'age' | 'gender' | 'room_number' | 'unit', value: string) => {
+    setStructuredJson((prev) => ({
+      ...prev,
+      patient: {
+        ...prev.patient,
+        [field]: value,
       },
     }));
   };
@@ -407,7 +465,12 @@ export default function ReportEditScreen() {
           note_id: finalNoteId,
           patient_id: finalPatientId,
           hasStructuredJson: !!structuredJson,
-          hasSOAPIE: !!structuredJson.soapie
+          hasSOAPIE: !!structuredJson.soapie,
+          patient: structuredJson.patient ? {
+            full_name: structuredJson.patient.full_name || '(vide)',
+            age: structuredJson.patient.age || '(vide)',
+            gender: structuredJson.patient.gender || '(vide)'
+          } : '(absent)'
         });
 
         const pdfResponse = await reportApiService.generatePDF({
@@ -451,7 +514,12 @@ export default function ReportEditScreen() {
           note_id: noteId,
           patient_id: finalPatientId,
           hasStructuredJson: !!structuredJson,
-          hasSOAPIE: !!structuredJson.soapie
+          hasSOAPIE: !!structuredJson.soapie,
+          patient: structuredJson.patient ? {
+            full_name: structuredJson.patient.full_name || '(vide)',
+            age: structuredJson.patient.age || '(vide)',
+            gender: structuredJson.patient.gender || '(vide)'
+          } : '(absent)'
         });
 
         const pdfResponse = await reportApiService.generatePDF({
@@ -499,6 +567,8 @@ export default function ReportEditScreen() {
     if (section.key === 'O' && section.isObject) {
       // Section Objective est un objet complexe
       const objective = structuredJson.soapie?.O;
+      const vitals = objective?.vitals || {};
+      
       return (
         <View key={section.key} style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
@@ -507,6 +577,78 @@ export default function ReportEditScreen() {
               <Text style={styles.sectionTitle}>{section.title}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </View>
+
+          {/* Signes vitaux */}
+          <View style={styles.subSection}>
+            <Text style={styles.subSectionLabel}>Signes vitaux</Text>
+            <View style={styles.vitalsGrid}>
+              <View style={styles.vitalRow}>
+                <Text style={styles.vitalLabel}>Température (°C)</Text>
+                <TextInput
+                  style={styles.vitalInput}
+                  placeholder="37.5"
+                  placeholderTextColor="#C7C7CC"
+                  value={vitals.temperature || ''}
+                  onChangeText={(text) => updateVitalField('temperature', text)}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={styles.vitalRow}>
+                <Text style={styles.vitalLabel}>Tension artérielle</Text>
+                <TextInput
+                  style={styles.vitalInput}
+                  placeholder="120/80"
+                  placeholderTextColor="#C7C7CC"
+                  value={vitals.blood_pressure || ''}
+                  onChangeText={(text) => updateVitalField('blood_pressure', text)}
+                />
+              </View>
+              <View style={styles.vitalRow}>
+                <Text style={styles.vitalLabel}>Fréquence cardiaque (bpm)</Text>
+                <TextInput
+                  style={styles.vitalInput}
+                  placeholder="72"
+                  placeholderTextColor="#C7C7CC"
+                  value={vitals.heart_rate || ''}
+                  onChangeText={(text) => updateVitalField('heart_rate', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.vitalRow}>
+                <Text style={styles.vitalLabel}>Respiration (/min)</Text>
+                <TextInput
+                  style={styles.vitalInput}
+                  placeholder="16"
+                  placeholderTextColor="#C7C7CC"
+                  value={vitals.respiratory_rate || ''}
+                  onChangeText={(text) => updateVitalField('respiratory_rate', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.vitalRow}>
+                <Text style={styles.vitalLabel}>SpO₂ (%)</Text>
+                <TextInput
+                  style={styles.vitalInput}
+                  placeholder="98"
+                  placeholderTextColor="#C7C7CC"
+                  value={vitals.spo2 || ''}
+                  onChangeText={(text) => updateVitalField('spo2', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.vitalRow}>
+                <Text style={styles.vitalLabel}>Glycémie (g/L)</Text>
+                <TextInput
+                  style={styles.vitalInput}
+                  placeholder="1.0"
+                  placeholderTextColor="#C7C7CC"
+                  value={vitals.glycemia || ''}
+                  onChangeText={(text) => updateVitalField('glycemia', text)}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
           </View>
 
           {/* Examen clinique */}
@@ -604,7 +746,7 @@ export default function ReportEditScreen() {
           >
             <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edition Report</Text>
+          <Text style={styles.headerTitle}>Édition du Rapport</Text>
           <TouchableOpacity
             style={styles.editIconButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -624,7 +766,7 @@ export default function ReportEditScreen() {
           )}
 
           {/* Indicateur de chargement initial */}
-          {isUploading && (
+          {isUploading && !isStructuringComplete && (
             <View style={styles.loadingCard}>
               <ActivityIndicator size="large" color="#006CFF" />
               <Text style={styles.loadingText}>
@@ -632,6 +774,90 @@ export default function ReportEditScreen() {
               </Text>
             </View>
           )}
+
+          {/* Indicateur de structuration terminée */}
+          {isStructuringComplete && !isUploading && (
+            <View style={styles.successCard}>
+              <Ionicons name="checkmark-circle" size={32} color="#34C759" />
+              <Text style={styles.successText}>
+                Structuration terminée
+              </Text>
+              <Text style={styles.successSubtext}>
+                Vous pouvez maintenant modifier les données ci-dessous
+              </Text>
+            </View>
+          )}
+
+          {/* Section Informations Patient */}
+          <View style={styles.patientCard}>
+            <View style={styles.patientCardHeader}>
+              <Ionicons name="person-circle-outline" size={20} color="#006CFF" />
+              <Text style={styles.patientCardTitle}>Informations du Patient</Text>
+            </View>
+            
+            <View style={styles.patientInfoGrid}>
+              {/* Nom complet */}
+              <View style={styles.patientInfoRow}>
+                <Text style={styles.patientInfoLabel}>Nom complet :</Text>
+                <TextInput
+                  style={styles.patientInfoInput}
+                  placeholder="Nom complet du patient"
+                  placeholderTextColor="#C7C7CC"
+                  value={structuredJson.patient?.full_name || patientData?.full_name || ''}
+                  onChangeText={(text) => updatePatientField('full_name', text)}
+                />
+              </View>
+
+              {/* Âge */}
+              <View style={styles.patientInfoRow}>
+                <Text style={styles.patientInfoLabel}>Âge :</Text>
+                <TextInput
+                  style={styles.patientInfoInput}
+                  placeholder="Ex: 45 ans"
+                  placeholderTextColor="#C7C7CC"
+                  value={structuredJson.patient?.age || patientData?.age || ''}
+                  onChangeText={(text) => updatePatientField('age', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Sexe */}
+              <View style={styles.patientInfoRow}>
+                <Text style={styles.patientInfoLabel}>Sexe :</Text>
+                <TextInput
+                  style={styles.patientInfoInput}
+                  placeholder="Ex: Homme, Femme"
+                  placeholderTextColor="#C7C7CC"
+                  value={structuredJson.patient?.gender || patientData?.gender || ''}
+                  onChangeText={(text) => updatePatientField('gender', text)}
+                />
+              </View>
+
+              {/* Chambre */}
+              <View style={styles.patientInfoRow}>
+                <Text style={styles.patientInfoLabel}>Chambre :</Text>
+                <TextInput
+                  style={styles.patientInfoInput}
+                  placeholder="Ex: 12, Chambre 5"
+                  placeholderTextColor="#C7C7CC"
+                  value={structuredJson.patient?.room_number || patientData?.room_number || ''}
+                  onChangeText={(text) => updatePatientField('room_number', text)}
+                />
+              </View>
+
+              {/* Unité / Service */}
+              <View style={styles.patientInfoRow}>
+                <Text style={styles.patientInfoLabel}>Unité / Service :</Text>
+                <TextInput
+                  style={styles.patientInfoInput}
+                  placeholder="Ex: Cardiologie, Urgences"
+                  placeholderTextColor="#C7C7CC"
+                  value={structuredJson.patient?.unit || patientData?.unit || ''}
+                  onChangeText={(text) => updatePatientField('unit', text)}
+                />
+              </View>
+            </View>
+          </View>
 
           {/* Sections SOAPIE */}
           {SOAPIE_SECTIONS.map((section) => renderSOAPIESection(section))}
@@ -788,6 +1014,63 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 40,
   },
+  patientCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  patientCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  patientCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    letterSpacing: -0.3,
+  },
+  patientInfoGrid: {
+    gap: 12,
+  },
+  patientInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  patientInfoLabel: {
+    fontSize: 15,
+    color: '#8E8E93',
+    fontWeight: '500',
+    flex: 1,
+  },
+  patientInfoValue: {
+    fontSize: 15,
+    color: '#1A1A1A',
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  patientInfoInput: {
+    flex: 1,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    textAlign: 'right',
+    minHeight: 40,
+  },
   loadingCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -802,5 +1085,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8E8E93',
     textAlign: 'center',
+  },
+  successCard: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  successText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1B5E20',
+    textAlign: 'center',
+  },
+  successSubtext: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#4A4A4A',
+    textAlign: 'center',
+  },
+  vitalsGrid: {
+    gap: 12,
+  },
+  vitalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  vitalLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1A1A1A',
+    flex: 1,
+    marginRight: 12,
+  },
+  vitalInput: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    flex: 1,
+    minWidth: 100,
   },
 });

@@ -194,7 +194,7 @@ export default function RecordScreen() {
           >
             <Ionicons name="close" size={24} color="#1A1A1A" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recording</Text>
+          <Text style={styles.headerTitle}>Enregistrement</Text>
           <TouchableOpacity
             style={styles.settingsButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

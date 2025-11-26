@@ -418,6 +418,52 @@ class ReportApiService {
   }
 
   /**
+   * Régénère l'URL signée pour le PDF d'un rapport
+   * @param {string} reportId - ID du rapport
+   * @returns {Promise<string>} - Nouvelle URL signée
+   */
+  async regenerateSignedUrl(reportId: string): Promise<string> {
+    try {
+      const token = await this.getAuthToken();
+      if (!token) {
+        throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
+      }
+
+      console.log(`🔗 Régénération de l'URL signée pour le rapport: ${reportId}`);
+
+      const response = await axios.get<{ ok: boolean; signed_url: string }>(
+        `${this.baseURL}/api/reports/${reportId}/signed-url`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        }
+      ).catch((error) => {
+        if (error.response?.status === 401) {
+          console.error('❌ Erreur 401 lors de la régénération de l\'URL');
+          if (isTokenExpiredError(error)) {
+            handleTokenExpiration();
+            throw new Error('Session expirée. Veuillez vous reconnecter.');
+          }
+        }
+        throw error;
+      });
+
+      if (response.data.ok && response.data.signed_url) {
+        console.log('✅ URL signée régénérée avec succès');
+        return response.data.signed_url;
+      }
+
+      throw new Error('Réponse invalide du serveur');
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la régénération de l\'URL signée:', error);
+      throw error instanceof Error ? error : new Error('Erreur lors de la régénération de l\'URL signée');
+    }
+  }
+
+  /**
    * Supprime un rapport (met à la corbeille)
    * @param {string} reportId - ID du rapport à supprimer
    */

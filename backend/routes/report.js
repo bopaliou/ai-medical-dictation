@@ -8,19 +8,24 @@ const express = require('express');
 const fs = require('fs');
 const { authenticate, authorize } = require('../middleware/auth');
 const { generatePDF } = require('../services/pdfGenerator');
-const { uploadPDF, getNoteById, updateNote, deleteNote, getReportsByUser, getPatientById } = require('../services/supabase');
+const { uploadPDF, getNoteById, updateNote, deleteNote, deleteReportAndFiles, getReportsByUser, getPatientById, deletePDFFromStorage, createSignedUrlForPDF } = require('../services/supabase');
 
 // Helper pour calculer l'âge depuis une date de naissance
 function calculateAge(dob) {
   if (!dob) return null;
-  const birthDate = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
+  try {
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return `${age} ans`;
+  } catch (error) {
+    return null;
   }
-  return age.toString();
 }
 
 const router = express.Router();
@@ -129,6 +134,99 @@ router.get('/', authenticate, authorize(['nurse', 'admin', 'auditor']), async (r
     console.error('Erreur lors de la récupération des rapports:', error);
     res.status(500).json({
       error: 'Erreur lors de la récupération des rapports',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/reports/:id/signed-url
+ * Régénère l'URL publique pour le PDF d'un rapport
+ * IMPORTANT: Cette route doit être définie AVANT /:id pour éviter les conflits de routing
+ * Note: Les buckets sont maintenant publics, cette route génère une URL publique
+ */
+router.get('/:id/signed-url', authenticate, authorize(['nurse', 'admin', 'auditor']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🔗 GET /api/reports/${id}/signed-url - Régénération de l'URL signée par l'utilisateur: ${userId}`);
+
+    // Récupérer la note
+    const note = await getNoteById(id);
+    if (!note) {
+      return res.status(404).json({
+        error: 'Rapport non trouvé',
+        message: `Le rapport avec l'ID ${id} n'existe pas`
+      });
+    }
+
+    // Vérifier les permissions
+    if (note.created_by !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Accès refusé',
+        message: 'Vous n\'êtes pas autorisé à accéder à ce rapport'
+      });
+    }
+
+    if (!note.pdf_url) {
+      return res.status(404).json({
+        error: 'PDF non trouvé',
+        message: 'Ce rapport n\'a pas de PDF associé'
+      });
+    }
+
+    // Extraire le path depuis l'URL existante (peut être signée ou publique)
+    // Format signée: https://project.supabase.co/storage/v1/object/sign/bucket-name/path/to/file.pdf?token=...
+    // Format publique: https://project.supabase.co/storage/v1/object/public/bucket-name/path/to/file.pdf
+    let filePath = null;
+    try {
+      const urlObj = new URL(note.pdf_url);
+      // Le path est dans le chemin après le nom du bucket
+      // Format: /storage/v1/object/[sign|public]/bucket-name/path/to/file.pdf
+      const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/(?:sign|public)\/[^/]+\/(.+)$/);
+      if (pathMatch) {
+        filePath = decodeURIComponent(pathMatch[1]);
+        console.log(`📋 Path extrait depuis l'URL: ${filePath}`);
+      } else {
+        // Format alternatif: essayer d'extraire directement après le bucket
+        const pathMatch2 = urlObj.pathname.match(/\/storage\/v1\/object\/[^/]+\/[^/]+\/(.+)$/);
+        if (pathMatch2) {
+          filePath = decodeURIComponent(pathMatch2[1]);
+          console.log(`📋 Path extrait (format alternatif): ${filePath}`);
+        } else {
+          console.warn(`⚠️ Impossible d'extraire le path depuis l'URL: ${note.pdf_url}`);
+        }
+      }
+    } catch (urlError) {
+      console.error('❌ Erreur lors de l\'extraction du path depuis l\'URL:', urlError);
+    }
+
+    if (!filePath) {
+      // Si on ne peut pas extraire le path, retourner l'URL existante
+      console.warn('⚠️ Impossible d\'extraire le path, retour de l\'URL existante');
+      return res.status(200).json({
+        ok: true,
+        signed_url: note.pdf_url
+      });
+    }
+
+    console.log(`📋 Path extrait: ${filePath}`);
+
+    // Générer une nouvelle URL publique
+    const signedUrl = await createSignedUrlForPDF(filePath, 31536000); // Note: buckets publics, retourne URL publique
+
+    console.log(`✅ URL publique régénérée avec succès pour le rapport: ${id}`);
+
+    res.status(200).json({
+      ok: true,
+      signed_url: signedUrl
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur lors de la régénération de l\'URL signée:', error);
+    res.status(500).json({
+      error: 'Erreur lors de la régénération de l\'URL signée',
       message: error.message
     });
   }
@@ -457,64 +555,74 @@ router.post('/generate', authenticate, async (req, res) => {
       }
     }
     
-    // Fusionner les données : DB est la source de vérité pour full_name
-    // structured_json.patient complète uniquement les champs manquants ou vides
+    // Fusionner les données : Priorité aux données extraites de l'audio (structured_json.patient)
+    // car elles sont directement issues de la dictée et donc les plus récentes et complètes
     patient = {};
     
-    // PRIORITÉ 1: Commencer avec les données de la DB (source de vérité)
-    if (patientFromDB) {
-      patient = { ...patientFromDB };
-      console.log('   Base: Patient initialisé depuis DB (source de vérité)');
-    }
+    // Fonction helper pour vérifier si une valeur est valide (non vide)
+    const isValidValue = (value) => {
+      if (value === null || value === undefined) return false;
+      if (typeof value === 'string' && value.trim() === '') return false;
+      if (typeof value === 'string' && value.trim().toLowerCase() === 'non spécifié') return false;
+      if (typeof value === 'string' && value.trim().toLowerCase() === 'non mentionné') return false;
+      return true;
+    };
     
-    // PRIORITÉ 2: Compléter avec structured_json.patient UNIQUEMENT si les valeurs sont non vides
-    // IMPORTANT: Ne JAMAIS écraser full_name de la DB avec un full_name vide de l'IA
+    // PRIORITÉ 1: Utiliser les données extraites de l'audio (structured_json.patient)
+    // Ces données sont directement issues de la dictée et donc les plus fiables
     if (structured_json.patient) {
       for (const key in structured_json.patient) {
         const value = structured_json.patient[key];
-        const valueIsValid = value !== null && value !== undefined && value.toString().trim() !== '';
-        
-        // Pour full_name : NE JAMAIS écraser si la DB a déjà un full_name valide
-        if (key === 'full_name') {
-          // Utiliser structured_json.full_name UNIQUEMENT si :
-          // 1. Il est non vide ET
-          // 2. La DB n'a pas de full_name OU le full_name de la DB est "Patient non identifié"
-          if (valueIsValid && (!patient.full_name || patient.full_name === 'Patient non identifié' || patient.full_name.trim() === '')) {
-            patient[key] = value;
-            console.log(`   Fusion: full_name depuis IA (DB avait: "${patientFromDB?.full_name || 'vide'}")`);
-          } else {
-            console.log(`   Fusion: full_name conservé depuis DB (IA avait: "${value || 'vide'}")`);
-          }
-        } else {
-          // Pour les autres champs : utiliser structured_json si non vide, sinon garder DB
-          if (valueIsValid) {
-            patient[key] = value;
-          } else if (!patient[key] && patientFromDB && patientFromDB[key]) {
-            // Utiliser la valeur de la DB si structured_json est vide
-            patient[key] = patientFromDB[key];
-          }
+        if (isValidValue(value)) {
+          patient[key] = typeof value === 'string' ? value.trim() : value;
+          console.log(`   ✅ ${key} depuis audio: "${patient[key]}"`);
         }
       }
-      console.log('   Fusion: Données IA fusionnées avec DB (DB prioritaire pour full_name)');
+      console.log('   Base: Patient initialisé depuis données audio (priorité)');
     }
     
-    // Si toujours pas de patient, utiliser structured_json.patient directement
-    if (!patient || Object.keys(patient).length === 0) {
-      if (structured_json.patient) {
-        patient = structured_json.patient;
-        console.log('   Fallback: Utilisation directe de structured_json.patient');
-      } else if (note && note.structured_json?.patient) {
-        patient = note.structured_json.patient;
-        console.log('   Fallback: Utilisation de note.structured_json.patient');
+    // PRIORITÉ 2: Compléter avec les données de la DB pour les champs manquants
+    // La DB sert de complément, pas de source principale
+    if (patientFromDB) {
+      // Pour full_name : utiliser DB seulement si audio n'a pas fourni de nom valide
+      if (!isValidValue(patient.full_name) && isValidValue(patientFromDB.full_name)) {
+        patient.full_name = patientFromDB.full_name;
+        console.log(`   ✅ full_name complété depuis DB: "${patient.full_name}"`);
       }
+      
+      // Pour age : utiliser DB.dob si audio n'a pas fourni d'âge
+      if (!isValidValue(patient.age) && patientFromDB.dob) {
+        const ageFromDB = calculateAge(patientFromDB.dob);
+        if (ageFromDB) {
+          patient.age = ageFromDB;
+          console.log(`   ✅ age complété depuis DB.dob: "${patient.age}"`);
+        }
+      }
+      
+      // Pour les autres champs : compléter seulement si manquants
+      ['gender', 'room_number', 'unit'].forEach(key => {
+        if (!isValidValue(patient[key]) && isValidValue(patientFromDB[key])) {
+          patient[key] = patientFromDB[key];
+          console.log(`   ✅ ${key} complété depuis DB: "${patient[key]}"`);
+        }
+      });
+      
+      console.log('   Complément: Données DB utilisées pour compléter les champs manquants');
     }
     
-    console.log('   Résultat final patient:', {
+    // Fallback final : utiliser note.structured_json.patient si disponible
+    if ((!patient || Object.keys(patient).length === 0) && note && note.structured_json?.patient) {
+      patient = { ...note.structured_json.patient };
+      console.log('   Fallback: Utilisation de note.structured_json.patient');
+    }
+    
+    console.log('   📋 Résultat final patient après fusion:', {
       full_name: patient?.full_name || '(vide)',
       age: patient?.age || '(vide)',
       gender: patient?.gender || '(vide)',
       room_number: patient?.room_number || '(vide)',
-      unit: patient?.unit || '(vide)'
+      unit: patient?.unit || '(vide)',
+      source: patientFromDB ? 'DB + Audio' : 'Audio uniquement'
     });
 
     // Validation finale : si toujours pas de patient avec full_name, utiliser "Patient Inconnu"
@@ -552,11 +660,14 @@ router.post('/generate', authenticate, async (req, res) => {
 
     try {
       console.log('📄 Début de la génération PDF...');
-      console.log('   Patient:', JSON.stringify({
-        full_name: patient?.full_name,
-        age: patient?.age,
-        gender: patient?.gender
+      console.log('   📋 Patient final pour PDF:', JSON.stringify({
+        full_name: patient?.full_name || '(vide)',
+        age: patient?.age || '(vide)',
+        gender: patient?.gender || '(vide)',
+        room_number: patient?.room_number || '(vide)',
+        unit: patient?.unit || '(vide)'
       }, null, 2));
+      console.log('   📋 structured_json.patient (données audio):', JSON.stringify(structured_json.patient || {}, null, 2));
       console.log('   Patient ID:', patient_id || 'non spécifié');
       console.log('   User:', nurseInfo.full_name);
       
@@ -569,7 +680,9 @@ router.post('/generate', authenticate, async (req, res) => {
           structuredJson: structured_json,
           recordedAt: note?.recorded_at ? new Date(note.recorded_at) : new Date(),
           createdAt: new Date(),
-          user: nurseInfo
+          user: nurseInfo,
+          noteId: note_id || note?.id || null,
+          patientId: patient_id || patient?.id || note?.patient_id || null
         });
       } catch (pdfError) {
         console.error('❌ Erreur dans generatePDF:', pdfError);
@@ -585,8 +698,43 @@ router.post('/generate', authenticate, async (req, res) => {
 
       // Upload du PDF vers Supabase Storage
       console.log('   Étape 2/4: Upload vers Supabase Storage...');
-      const pdfFileName = `pdfs/${patient_id || 'unknown'}/${Date.now()}-note.pdf`;
-      const pdfUploadResult = await uploadPDF(pdfFilePath, pdfFileName);
+      
+      // Si on modifie un PDF existant, utiliser le même path pour le remplacer
+      let pdfFileName = null;
+      let shouldUpsert = false;
+      
+      if (note_id && note && note.pdf_url) {
+        // Extraire le path depuis l'URL existante
+        try {
+          const urlObj = new URL(note.pdf_url);
+          // Format: /storage/v1/object/public/bucket-name/path/to/file.pdf
+          const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/(?:sign|public)\/[^/]+\/(.+)$/);
+          if (pathMatch) {
+            pdfFileName = decodeURIComponent(pathMatch[1]);
+            shouldUpsert = true; // Remplacer le fichier existant
+            console.log(`   📋 Modification du PDF existant: ${pdfFileName}`);
+          } else {
+            // Format alternatif
+            const pathMatch2 = urlObj.pathname.match(/\/storage\/v1\/object\/[^/]+\/[^/]+\/(.+)$/);
+            if (pathMatch2) {
+              pdfFileName = decodeURIComponent(pathMatch2[1]);
+              shouldUpsert = true;
+              console.log(`   📋 Modification du PDF existant (format alternatif): ${pdfFileName}`);
+            }
+          }
+        } catch (urlError) {
+          console.warn('   ⚠️  Erreur lors de l\'extraction du path, création d\'un nouveau PDF:', urlError.message);
+        }
+      }
+      
+      // Si on n'a pas pu extraire le path, créer un nouveau PDF
+      if (!pdfFileName) {
+        pdfFileName = `pdfs/${patient_id || 'unknown'}/${Date.now()}-note.pdf`;
+        shouldUpsert = false; // Nouveau fichier
+        console.log(`   📋 Création d'un nouveau PDF: ${pdfFileName}`);
+      }
+      
+      const pdfUploadResult = await uploadPDF(pdfFilePath, pdfFileName, shouldUpsert);
 
       if (!pdfUploadResult || !pdfUploadResult.url) {
         throw new Error('L\'upload PDF a échoué : URL non retournée');
@@ -689,40 +837,67 @@ router.delete('/:id', authenticate, authorize(['nurse', 'admin']), async (req, r
     const { id } = req.params;
     const userId = req.user.id;
 
-    console.log(`🗑️ Suppression du rapport: ${id} par l'utilisateur: ${userId}`);
+    // Validation de l'ID
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      return res.status(400).json({
+        ok: false,
+        error: 'ID de rapport invalide'
+      });
+    }
 
-    // Vérifier que la note existe
+    // Vérifier que la note existe et que l'utilisateur a les permissions
     const note = await getNoteById(id);
     if (!note) {
       return res.status(404).json({
+        ok: false,
         error: 'Rapport non trouvé',
         message: `Le rapport avec l'ID ${id} n'existe pas`
       });
     }
 
-    // Vérifier que l'utilisateur est le créateur de la note
+    // Vérifier les permissions
     if (note.created_by !== userId && req.user.role !== 'admin') {
       return res.status(403).json({
+        ok: false,
         error: 'Accès refusé',
         message: 'Vous n\'êtes pas autorisé à supprimer ce rapport'
       });
     }
 
-    // Supprimer la note (et le PDF du storage)
-    await deleteNote(id, true);
+    // Supprimer le rapport et tous ses fichiers de manière idempotente
+    // Cette fonction est tolérante aux fichiers déjà supprimés et peut être appelée plusieurs fois
+    const deleteResult = await deleteReportAndFiles(id);
 
-    console.log(`✅ Rapport supprimé avec succès: ${id}`);
-
-    res.status(200).json({
+    // Retourner la réponse de succès
+    return res.status(200).json({
       ok: true,
-      message: 'Rapport supprimé avec succès'
+      message: 'Rapport supprimé avec succès',
+      deleted: deleteResult.deleted
     });
 
   } catch (error) {
-    console.error('Erreur lors de la suppression du rapport:', error);
-    res.status(500).json({
+    // Gérer les erreurs spécifiques
+    if (error.message && error.message.includes('contrainte FK')) {
+      return res.status(500).json({
+        ok: false,
+        error: 'Erreur de configuration',
+        message: 'La migration SQL n\'a pas été appliquée. Veuillez contacter l\'administrateur.'
+      });
+    }
+
+    if (error.message && error.message.includes('non trouvée')) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Rapport non trouvé',
+        message: error.message
+      });
+    }
+
+    // Erreur générique
+    return res.status(500).json({
+      ok: false,
       error: 'Erreur lors de la suppression du rapport',
-      message: error.message
+      message: error.message || 'Une erreur inattendue s\'est produite'
     });
   }
 });

@@ -107,7 +107,7 @@ async function uploadAudio(filePath, fileName) {
 
     console.log(`✅ Upload réussi, path: ${data.path}`);
 
-    // Génération de l'URL publique signée (ou privée)
+    // Génération de l'URL publique (bucket public)
     const { data: urlData } = supabase.storage
       .from(BUCKET_AUDIO)
       .getPublicUrl(data.path);
@@ -116,7 +116,7 @@ async function uploadAudio(filePath, fileName) {
       throw new Error('Impossible de générer l\'URL publique du fichier audio');
     }
 
-    console.log(`✅ URL publique générée: ${urlData.publicUrl}`);
+    console.log(`✅ URL publique générée: ${urlData.publicUrl.substring(0, 80)}...`);
 
     return {
       url: urlData.publicUrl,
@@ -133,9 +133,10 @@ async function uploadAudio(filePath, fileName) {
  * Upload un PDF vers Supabase Storage
  * @param {string} filePath - Chemin local du fichier PDF
  * @param {string} fileName - Nom du fichier dans le storage
+ * @param {boolean} upsert - Si true, remplace le fichier existant au lieu d'échouer (défaut: false)
  * @returns {Promise<{url: string, path: string}>}
  */
-async function uploadPDF(filePath, fileName) {
+async function uploadPDF(filePath, fileName, upsert = false) {
   try {
     // Vérifier que le fichier existe
     if (!fs.existsSync(filePath)) {
@@ -170,7 +171,7 @@ async function uploadPDF(filePath, fileName) {
       .from(BUCKET_PDFS)
       .upload(fileName, fileBuffer, {
         contentType: 'application/pdf',
-        upsert: false
+        upsert: upsert // Si true, remplace le fichier existant
       });
 
     if (error) {
@@ -184,7 +185,7 @@ async function uploadPDF(filePath, fileName) {
 
     console.log(`   ✅ Upload réussi: ${data.path}`);
 
-    // Génération de l'URL publique
+    // Génération de l'URL publique (bucket public)
     const { data: urlData } = supabase.storage
       .from(BUCKET_PDFS)
       .getPublicUrl(data.path);
@@ -193,7 +194,7 @@ async function uploadPDF(filePath, fileName) {
       throw new Error('Impossible de générer l\'URL publique du PDF');
     }
 
-    console.log(`   ✅ URL publique: ${urlData.publicUrl}`);
+    console.log(`   ✅ URL publique générée: ${urlData.publicUrl.substring(0, 80)}...`);
 
     return {
       url: urlData.publicUrl,
@@ -544,106 +545,366 @@ async function getNoteById(noteId) {
  * @returns {Promise<Object>}
  */
 /**
+ * Normalise une URL publique Supabase pour extraire le bucket et le path
+ * 
+ * Cette fonction est idempotente et tolérante aux différents formats d'URL :
+ * - Format public: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
+ * - Format signé: https://[project].supabase.co/storage/v1/object/sign/[bucket]/[path]?token=...
+ * 
+ * Raison d'être : Les fichiers peuvent être supprimés manuellement depuis Supabase UI,
+ * donc les URLs peuvent être invalides ou les fichiers absents. Cette fonction permet
+ * d'extraire le path de manière robuste pour une suppression idempotente.
+ * 
+ * @param {string} url - URL complète du fichier (publique ou signée)
+ * @returns {{bucket: string, path: string} | null} - Objet avec bucket et path, ou null si l'URL est invalide
+ */
+function normalizePathFromPublicUrl(url) {
+  try {
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+      return null;
+    }
+
+    // Méthode 1: Utiliser l'API URL pour parser proprement
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      
+      // Pattern: /storage/v1/object/public/[bucket]/[path] ou /storage/v1/object/sign/[bucket]/[path]
+      const match = pathname.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)$/);
+      
+      if (match) {
+        return {
+          bucket: match[1],
+          path: decodeURIComponent(match[2])
+        };
+      }
+    } catch (urlError) {
+      // Si l'URL n'est pas valide, essayer la méthode par split
+    }
+
+    // Méthode 2: Split manuel (fallback)
+    const urlParts = url.split('/storage/v1/object/');
+    if (urlParts.length < 2) {
+      return null;
+    }
+
+    const pathAfterObject = urlParts[1].split('?')[0]; // Enlever les query params
+    let pathParts;
+    
+    if (pathAfterObject.startsWith('public/')) {
+      pathParts = pathAfterObject.replace('public/', '').split('/');
+    } else if (pathAfterObject.startsWith('sign/')) {
+      pathParts = pathAfterObject.replace('sign/', '').split('/');
+    } else {
+      return null;
+    }
+
+    if (pathParts.length < 2) {
+      return null;
+    }
+
+    return {
+      bucket: pathParts[0],
+      path: pathParts.slice(1).join('/')
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Supprime un fichier du storage Supabase de manière idempotente
+ * 
+ * Cette fonction est idempotente : elle ne lève pas d'exception si le fichier est absent.
+ * Cela permet de :
+ * - Réessayer la suppression sans erreur si le fichier a déjà été supprimé
+ * - Gérer les cas où le fichier a été supprimé manuellement depuis Supabase UI
+ * - Éviter les erreurs lors de la suppression de rapports déjà partiellement supprimés
+ * 
+ * @param {string} bucket - Nom du bucket (ex: 'medical-notes-pdf', 'audio-recordings')
+ * @param {string} filePath - Chemin du fichier dans le bucket (ex: 'pdfs/patient-id/file.pdf')
+ * @returns {Promise<{success: boolean, message: string}>} - Résultat de la suppression
+ */
+async function removeFileIfExists(bucket, filePath) {
+  try {
+    if (!bucket || typeof bucket !== 'string' || bucket.trim() === '') {
+      return { success: false, message: 'Bucket invalide' };
+    }
+
+    if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
+      return { success: false, message: 'Path invalide' };
+    }
+
+    console.log(`🗑️ Tentative de suppression: ${bucket}/${filePath}`);
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .remove([filePath]);
+
+    if (error) {
+      // Erreurs tolérées (fichier déjà supprimé, non trouvé, etc.)
+      const errorMessage = error.message || String(error);
+      const isNotFound = errorMessage.toLowerCase().includes('not found') ||
+                        errorMessage.toLowerCase().includes('does not exist') ||
+                        errorMessage.toLowerCase().includes('no such file') ||
+                        error.statusCode === 404;
+
+      if (isNotFound) {
+        console.log(`   ℹ️  Fichier déjà absent: ${bucket}/${filePath} (suppression idempotente OK)`);
+        return { success: true, message: 'Fichier déjà absent (idempotent)' };
+      } else {
+        console.warn(`   ⚠️  Erreur lors de la suppression (non bloquant): ${errorMessage}`);
+        return { success: false, message: errorMessage };
+      }
+    }
+
+    // Succès
+    console.log(`   ✅ Fichier supprimé: ${bucket}/${filePath}`);
+    return { success: true, message: 'Fichier supprimé avec succès' };
+
+  } catch (error) {
+    // Erreur inattendue (réseau, timeout, etc.) - loguer mais ne pas bloquer
+    console.warn(`   ⚠️  Exception lors de la suppression (non bloquant): ${error.message}`);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Supprime un fichier du storage Supabase (générique pour PDF ou audio)
+ * @param {string} fileUrl - URL complète du fichier
+ * @param {string} fileType - Type de fichier ('pdf' ou 'audio') pour les logs
+ * @returns {Promise<void>}
+ * @deprecated Utiliser removeFileIfExists() avec normalizePathFromPublicUrl() à la place
+ */
+async function deleteFileFromStorage(fileUrl, fileType = 'fichier') {
+  try {
+    if (!fileUrl || typeof fileUrl !== 'string' || fileUrl.trim() === '') {
+      return;
+    }
+
+    const normalized = normalizePathFromPublicUrl(fileUrl);
+    if (!normalized) {
+      console.warn(`⚠️ Format d'URL ${fileType} non reconnu: ${fileUrl.substring(0, 80)}...`);
+      return;
+    }
+
+    await removeFileIfExists(normalized.bucket, normalized.path);
+  } catch (error) {
+    console.warn(`⚠️ Erreur lors de la suppression du ${fileType} (non bloquant): ${error.message}`);
+  }
+}
+
+/**
  * Supprime un fichier PDF du storage Supabase
  * @param {string} pdfUrl - URL complète du PDF
  * @returns {Promise<void>}
  */
 async function deletePDFFromStorage(pdfUrl) {
+  if (!pdfUrl || typeof pdfUrl !== 'string' || pdfUrl.trim() === '') {
+    return; // Ignorer silencieusement si pas d'URL
+  }
+  return deleteFileFromStorage(pdfUrl, 'PDF');
+}
+
+/**
+ * Supprime un fichier audio du storage Supabase
+ * @param {string} audioUrl - URL complète de l'audio
+ * @returns {Promise<void>}
+ */
+async function deleteAudioFromStorage(audioUrl) {
+  if (!audioUrl || typeof audioUrl !== 'string' || audioUrl.trim() === '') {
+    return; // Ignorer silencieusement si pas d'URL
+  }
+  return deleteFileFromStorage(audioUrl, 'audio');
+}
+
+/**
+ * Crée une URL publique pour un fichier PDF à partir de son path
+ * @param {string} filePath - Chemin du fichier dans le bucket (ex: "pdfs/patient-id/timestamp-note.pdf")
+ * @param {number} expiresIn - Non utilisé (conservé pour compatibilité, les buckets publics n'expirent pas)
+ * @returns {Promise<string>} - URL publique
+ */
+async function createSignedUrlForPDF(filePath, expiresIn = 31536000) {
   try {
-    if (!pdfUrl) {
-      console.log('⚠️ Aucune URL PDF fournie, skip suppression storage');
-      return;
+    console.log(`🔗 Génération d'URL publique pour PDF: ${filePath}`);
+    
+    // Les buckets sont maintenant publics, utiliser getPublicUrl()
+    const { data: urlData } = supabase.storage
+      .from(BUCKET_PDFS)
+      .getPublicUrl(filePath);
+
+    if (!urlData || !urlData.publicUrl) {
+      throw new Error('Impossible de générer l\'URL publique du PDF');
     }
 
-    // Extraire le chemin du fichier depuis l'URL
-    // Format URL: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
-    const urlParts = pdfUrl.split('/storage/v1/object/public/');
-    if (urlParts.length < 2) {
-      console.warn('⚠️ Format d\'URL PDF non reconnu:', pdfUrl);
-      return;
-    }
-
-    const pathParts = urlParts[1].split('/');
-    const bucketName = pathParts[0];
-    const filePath = pathParts.slice(1).join('/');
-
-    console.log(`🗑️ Suppression du PDF du storage: ${bucketName}/${filePath}`);
-
-    const { error } = await supabase.storage
-      .from(bucketName)
-      .remove([filePath]);
-
-    if (error) {
-      // Ne pas faire échouer la suppression de la note si le PDF n'existe pas
-      console.warn('⚠️ Erreur lors de la suppression du PDF du storage (non bloquant):', error.message);
-    } else {
-      console.log(`✅ PDF supprimé du storage: ${filePath}`);
-    }
+    console.log(`✅ URL publique générée: ${urlData.publicUrl.substring(0, 80)}...`);
+    return urlData.publicUrl;
   } catch (error) {
-    // Ne pas faire échouer la suppression de la note si le PDF ne peut pas être supprimé
-    console.warn('⚠️ Erreur lors de la suppression du PDF du storage (non bloquant):', error.message);
+    console.error('❌ Erreur createSignedUrlForPDF:', error);
+    throw error;
   }
 }
 
 /**
- * Supprime une note (soft delete ou hard delete)
+ * Supprime un rapport et tous ses fichiers associés de manière idempotente
+ * 
+ * Cette fonction est idempotente : elle peut être appelée plusieurs fois sans erreur,
+ * même si le rapport ou les fichiers ont déjà été supprimés. Cela permet de :
+ * - Réessayer la suppression sans erreur en cas d'échec partiel
+ * - Gérer les cas où les fichiers ont été supprimés manuellement depuis Supabase UI
+ * - Éviter les erreurs lors de la suppression de rapports déjà partiellement supprimés
+ * 
+ * Supprime automatiquement :
+ * - Le PDF associé dans Supabase Storage (si présent, idempotent)
+ * - Le fichier audio associé dans Supabase Storage (si présent, idempotent)
+ * - Les entrées notes_audit liées (via ON DELETE CASCADE)
+ * - La note elle-même de la base de données
+ * 
  * @param {string} noteId - ID de la note à supprimer
- * @param {boolean} deletePDF - Si true, supprime aussi le PDF du storage (défaut: true)
- * @returns {Promise<void>}
+ * @returns {Promise<{success: boolean, deleted: {note: boolean, pdf: boolean, audio: boolean, audit: boolean}}>}
+ * @throws {Error} Seulement si la note existe mais ne peut pas être supprimée (contrainte FK, etc.)
  */
-async function deleteNote(noteId, deletePDF = true) {
-  try {
-    console.log(`🗑️ Suppression de la note: ${noteId}`);
-
-    // Récupérer la note pour obtenir l'URL du PDF
-    let pdfUrl = null;
-    if (deletePDF) {
-      const note = await getNoteById(noteId);
-      if (note && note.pdf_url) {
-        pdfUrl = note.pdf_url;
-      }
+async function deleteReportAndFiles(noteId) {
+  const result = {
+    success: false,
+    deleted: {
+      note: false,
+      pdf: false,
+      audio: false,
+      audit: false
     }
-    
-    // Supprimer la note de la base de données
-    // NOTE: Avec ON DELETE CASCADE sur la contrainte FK notes_audit_note_id_fkey,
-    // tous les audits associés seront automatiquement supprimés par la base de données.
-    // Le trigger BEFORE DELETE insère un audit de suppression juste avant la suppression,
-    // mais cet audit sera aussi supprimé par CASCADE (comportement souhaité).
-    const { error } = await supabase
-      .from('notes')
-      .delete()
-      .eq('id', noteId);
+  };
 
-    if (error) {
-      // Si l'erreur est liée à la contrainte de clé étrangère,
-      // cela signifie que la migration SQL n'a pas été appliquée.
-      if (error.message && error.message.includes('notes_audit_note_id_fkey')) {
-        console.error(`❌ Erreur de contrainte FK détectée.`);
-        console.error(`❌ La migration SQL n'a pas été appliquée.`);
-        console.error(`❌ Veuillez exécuter: supabase/migrations/fix_audit_trigger_on_delete.sql`);
-        console.error(`❌ Dans Supabase Dashboard > SQL Editor`);
-        throw new Error(
-          `Erreur lors de la suppression de la note: ${error.message}\n` +
-          `SOLUTION: Appliquez la migration SQL dans Supabase Dashboard > SQL Editor:\n` +
-          `Fichier: supabase/migrations/fix_audit_trigger_on_delete.sql\n` +
-          `Cette migration recrée la contrainte FK avec ON DELETE CASCADE.`
-        );
+  try {
+    // Validation de l'ID
+    if (!noteId || typeof noteId !== 'string' || noteId.trim() === '') {
+      throw new Error('ID de note invalide');
+    }
+
+    console.log(`🗑️ Suppression idempotente du rapport: ${noteId}`);
+
+    // CAS 1: Récupérer la note pour obtenir les URLs des fichiers
+    let note = null;
+    let pdfUrl = null;
+    let audioUrl = null;
+
+    try {
+      note = await getNoteById(noteId);
+      if (note) {
+        pdfUrl = note.pdf_url || null;
+        audioUrl = note.audio_url || null;
+        console.log(`   📋 Note trouvée:`, {
+          id: note.id,
+          pdf_url: pdfUrl ? 'présent' : 'absent',
+          audio_url: audioUrl ? 'présent' : 'absent'
+        });
       } else {
-        throw new Error(`Erreur lors de la suppression de la note: ${error.message}`);
+        console.log(`   ℹ️  Note non trouvée (déjà supprimée ?): ${noteId}`);
+      }
+    } catch (error) {
+      console.log(`   ℹ️  Erreur lors de la récupération de la note (peut être déjà supprimée): ${error.message}`);
+      // Continuer quand même pour nettoyer les fichiers si on a les URLs ailleurs
+    }
+
+    // CAS 2: Supprimer le PDF du storage (idempotent)
+    if (pdfUrl) {
+      const normalized = normalizePathFromPublicUrl(pdfUrl);
+      if (normalized) {
+        const pdfResult = await removeFileIfExists(normalized.bucket, normalized.path);
+        result.deleted.pdf = pdfResult.success;
+        console.log(`   ${pdfResult.success ? '✅' : '⚠️'} PDF: ${pdfResult.message}`);
+      } else {
+        console.warn(`   ⚠️  Impossible d'extraire le path du PDF depuis l'URL: ${pdfUrl.substring(0, 80)}...`);
       }
     } else {
-      console.log(`✅ Note supprimée de la base de données (les audits associés ont été supprimés automatiquement par CASCADE)`);
+      console.log(`   ℹ️  Pas de PDF à supprimer (URL absente)`);
     }
 
-    // Supprimer le PDF du storage si demandé
-    if (deletePDF && pdfUrl) {
-      await deletePDFFromStorage(pdfUrl);
+    // CAS 3: Supprimer l'audio du storage (idempotent)
+    if (audioUrl) {
+      const normalized = normalizePathFromPublicUrl(audioUrl);
+      if (normalized) {
+        const audioResult = await removeFileIfExists(normalized.bucket, normalized.path);
+        result.deleted.audio = audioResult.success;
+        console.log(`   ${audioResult.success ? '✅' : '⚠️'} Audio: ${audioResult.message}`);
+      } else {
+        console.warn(`   ⚠️  Impossible d'extraire le path de l'audio depuis l'URL: ${audioUrl.substring(0, 80)}...`);
+      }
+    } else {
+      console.log(`   ℹ️  Pas d'audio à supprimer (URL absente)`);
     }
 
-    console.log(`✅ Note supprimée avec succès: ${noteId}`);
+    // CAS 4: Supprimer les notes_audit manuellement (idempotent, même si CASCADE le fait aussi)
+    try {
+      const { error: auditError } = await supabase
+        .from('notes_audit')
+        .delete()
+        .eq('note_id', noteId);
+
+      if (auditError) {
+        // Erreur non bloquante - CASCADE le fera de toute façon
+        console.log(`   ℹ️  Erreur lors de la suppression des audits (non bloquant, CASCADE s'en chargera): ${auditError.message}`);
+      } else {
+        result.deleted.audit = true;
+        console.log(`   ✅ Notes_audit supprimées`);
+      }
+    } catch (error) {
+      console.log(`   ℹ️  Exception lors de la suppression des audits (non bloquant): ${error.message}`);
+    }
+
+    // CAS 5: Supprimer la note de la base de données
+    // Si la note n'existe pas, c'est OK (idempotent)
+    const { error: noteError, data } = await supabase
+      .from('notes')
+      .delete()
+      .eq('id', noteId)
+      .select();
+
+    if (noteError) {
+      // Si l'erreur est liée à la contrainte de clé étrangère,
+      // cela signifie que la migration SQL n'a pas été appliquée.
+      if (noteError.message && noteError.message.includes('notes_audit_note_id_fkey')) {
+        throw new Error(
+          `Erreur de contrainte FK: La migration SQL n'a pas été appliquée. ` +
+          `Veuillez exécuter: supabase/migrations/fix_audit_trigger_on_delete.sql`
+        );
+      }
+      throw new Error(`Erreur lors de la suppression de la note: ${noteError.message}`);
+    }
+
+    // Vérifier si la note a été supprimée
+    if (data && data.length > 0) {
+      result.deleted.note = true;
+      console.log(`   ✅ Note supprimée de la base de données`);
+    } else {
+      console.log(`   ℹ️  Note non trouvée ou déjà supprimée (idempotent OK)`);
+      // C'est OK si la note n'existe pas - c'est idempotent
+    }
+
+    result.success = true;
+    console.log(`✅ Suppression idempotente terminée: ${noteId}`, result.deleted);
+    return result;
+
   } catch (error) {
-    console.error('Erreur deleteNote:', error);
+    console.error(`❌ Erreur lors de la suppression du rapport: ${error.message}`);
     throw error;
+  }
+}
+
+/**
+ * Supprime une note (hard delete)
+ * 
+ * @deprecated Utiliser deleteReportAndFiles() à la place pour une suppression idempotente
+ * @param {string} noteId - ID de la note à supprimer
+ * @param {boolean} deleteFiles - Si true, supprime aussi le PDF et l'audio du storage (défaut: true)
+ * @returns {Promise<void>}
+ * @throws {Error} Si la note n'existe pas ou si la suppression échoue
+ */
+async function deleteNote(noteId, deleteFiles = true) {
+  // Déléguer à deleteReportAndFiles pour la compatibilité
+  const result = await deleteReportAndFiles(noteId);
+  if (!result.success) {
+    throw new Error('Échec de la suppression de la note');
   }
 }
 
@@ -814,7 +1075,12 @@ module.exports = {
   getNoteById,
   updateNote,
   deleteNote,
+  deleteReportAndFiles,
+  removeFileIfExists,
+  normalizePathFromPublicUrl,
   deletePDFFromStorage,
+  deleteAudioFromStorage,
+  createSignedUrlForPDF,
   getPatientById,
   createPatient,
   getAllPatients,
