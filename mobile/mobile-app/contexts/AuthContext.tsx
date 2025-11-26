@@ -4,6 +4,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setForceLogoutCallback } from '../utils/authInterceptor';
 
 const AUTH_TOKEN_KEY = '@auth_token';
 const AUTH_USER_KEY = '@auth_user';
@@ -14,6 +15,7 @@ interface AuthContextType {
   user: any;
   login: (token: string, userData: any) => Promise<void>;
   logout: () => Promise<void>;
+  forceLogout: () => Promise<void>; // Pour forcer la déconnexion (token expiré)
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,18 +33,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userStr = await AsyncStorage.getItem(AUTH_USER_KEY);
       
       if (token && userStr) {
+        // Note: La vérification d'expiration sera faite par le backend
+        // Si le token est expiré, le backend retournera 401 et on gérera ça dans les services API
+        // Les services API appelleront handleTokenExpiration() qui supprimera le token
         setIsAuthenticated(true);
         setUser(JSON.parse(userStr));
       } else {
         setIsAuthenticated(false);
+        setUser(null);
       }
     } catch (error) {
       console.error('Erreur lors de la vérification de l\'authentification:', error);
       setIsAuthenticated(false);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   };
+  
+  // Vérifier périodiquement si le token existe encore (au cas où il serait supprimé par handleTokenExpiration)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const interval = setInterval(async () => {
+      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+      if (!token) {
+        // Token supprimé (probablement par handleTokenExpiration)
+        console.log('🔒 Token supprimé - Mise à jour de l\'état d\'authentification');
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsLoading(false);
+      }
+    }, 1000); // Vérifier toutes les 1 seconde (plus réactif)
+    
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+  
+  // Réagir immédiatement quand isAuthenticated change à false
+  useEffect(() => {
+    if (isAuthenticated === false && !isLoading) {
+      console.log('🔒 État d\'authentification: false - L\'utilisateur sera redirigé vers /login');
+    }
+  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
     if (!isLoggingInGlobal) {
@@ -54,6 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }, 200);
     }
+    
+    // Enregistrer le callback pour que handleTokenExpiration puisse forcer la déconnexion
+    setForceLogoutCallback(async () => {
+      console.log('🔒 Callback forceLogout appelé depuis handleTokenExpiration');
+      setIsAuthenticated(false);
+      setUser(null);
+      setIsLoading(false);
+    });
   }, []);
 
   const login = async (token: string, userData: any) => {
@@ -87,6 +127,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const forceLogout = async () => {
+    // Force la déconnexion (utilisé quand le token est expiré)
+    console.warn('⚠️ Déconnexion forcée (token expiré)');
+    await logout();
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -95,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         login,
         logout,
+        forceLogout,
       }}
     >
       {children}

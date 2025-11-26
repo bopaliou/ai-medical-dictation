@@ -11,6 +11,21 @@ const path = require('path');
 const os = require('os');
 
 /**
+ * Helper pour sécuriser les valeurs et éviter undefined/null
+ * @param {any} value - Valeur à sécuriser
+ * @returns {string} - Valeur sécurisée ou "Non mentionné"
+ */
+const safe = (value) => {
+  if (value === null || value === undefined) {
+    return 'Non mentionné';
+  }
+  if (typeof value === 'string' && value.trim() === '') {
+    return 'Non mentionné';
+  }
+  return String(value);
+};
+
+/**
  * Nettoie un objet structuré en supprimant les valeurs vides, null, "Non mentionné", etc.
  * @param {Object} structured - Objet structuré avec patient et soapie
  * @returns {Object} - Objet nettoyé sans champs vides
@@ -206,27 +221,46 @@ function extractSection(noteContent, startMarker, endMarker) {
  * @returns {Promise<string>} - Chemin du fichier PDF généré
  */
 async function generatePDF({ patient, transcriptionText, structuredJson, recordedAt, createdAt, user }) {
-  // Nettoyer les données structurées avant génération PDF
-  // Cela supprime tous les champs vides, null, "Non mentionné", etc.
-  const cleanedStructured = cleanNoteFields(structuredJson || {});
-  
-  console.log('📄 Génération PDF avec données nettoyées');
-  console.log('Patient:', cleanedStructured.patient ? cleanedStructured.patient.full_name || '(vide)' : 'absent');
-  console.log('SOAPIE sections:', {
-    S: !!(cleanedStructured.soapie && cleanedStructured.soapie.S),
-    O: !!(cleanedStructured.soapie && cleanedStructured.soapie.O),
-    A: !!(cleanedStructured.soapie && cleanedStructured.soapie.A),
-    I: !!(cleanedStructured.soapie && Array.isArray(cleanedStructured.soapie.I) && cleanedStructured.soapie.I.length > 0),
-    E: !!(cleanedStructured.soapie && cleanedStructured.soapie.E),
-    P: !!(cleanedStructured.soapie && cleanedStructured.soapie.P)
-  });
-
-  // Création du nom de fichier temporaire
-  const tempDir = os.tmpdir();
-  const fileName = `note-${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`;
-  const filePath = path.join(tempDir, fileName);
-
   try {
+    // Validation des paramètres requis
+    // MODIFICATION : On ne bloque plus si 'patient' est null, car on a structuredJson
+    // On crée un objet patient composite (Base de données OU IA)
+    const patientData = patient || structuredJson?.patient || {};
+
+    if (!patientData.full_name && !structuredJson?.patient?.full_name) {
+      // On accepte de générer le PDF même sans nom, on mettra "Patient Inconnu"
+      console.warn("⚠️ Attention : Aucun nom de patient trouvé (ni en DB ni dans l'IA), utilisation de 'Patient Inconnu'");
+    }
+
+    if (!structuredJson) {
+      throw new Error('Le paramètre structuredJson est requis pour générer le PDF');
+    }
+    // L'objet user reste requis car c'est l'infirmière connectée
+    if (!user) {
+      throw new Error('Le paramètre user est requis pour générer le PDF');
+    }
+
+    // Nettoyer les données structurées avant génération PDF
+    // Cela supprime tous les champs vides, null, "Non mentionné", etc.
+    const cleanedStructured = cleanNoteFields(structuredJson || {});
+    
+    console.log('📄 Génération PDF avec données nettoyées');
+    console.log('Patient:', cleanedStructured.patient ? cleanedStructured.patient.full_name || '(vide)' : 'absent');
+    console.log('Patient (param):', patient?.full_name || 'absent');
+    console.log('SOAPIE sections:', {
+      S: !!(cleanedStructured.soapie && cleanedStructured.soapie.S),
+      O: !!(cleanedStructured.soapie && cleanedStructured.soapie.O),
+      A: !!(cleanedStructured.soapie && cleanedStructured.soapie.A),
+      I: !!(cleanedStructured.soapie && Array.isArray(cleanedStructured.soapie.I) && cleanedStructured.soapie.I.length > 0),
+      E: !!(cleanedStructured.soapie && cleanedStructured.soapie.E),
+      P: !!(cleanedStructured.soapie && cleanedStructured.soapie.P)
+    });
+
+    // Création du nom de fichier temporaire
+    const tempDir = os.tmpdir();
+    const fileName = `note-${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`;
+    const filePath = path.join(tempDir, fileName);
+
     // Création du document PDF A4 avec marges
     const doc = new PDFDocument({
       size: 'A4',
@@ -303,22 +337,28 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
     // Utiliser exclusivement cleanedStructured.patient (déjà nettoyé, sans champs vides ni "Non mentionné")
     // NE JAMAIS utiliser transcriptionText pour remplir les informations patient
     const extractedPatient = cleanedStructured.patient || {};
+    
+    // Fallback sécurisé : Données IA > Données DB > Null
+    const safePatientDB = patient || {}; // Évite le crash si patient est null
+
     const patientInfo = {
       full_name: extractedPatient.full_name && extractedPatient.full_name.trim() !== '' 
         ? extractedPatient.full_name 
-        : (patient.full_name && patient.full_name !== 'Patient non identifié' ? patient.full_name : null),
+        : (safePatientDB.full_name && safePatientDB.full_name !== 'Patient non identifié' 
+          ? safePatientDB.full_name 
+          : 'Patient Inconnu'), // Fallback ultime
       age: extractedPatient.age && extractedPatient.age.trim() !== '' 
         ? extractedPatient.age 
-        : (patient.dob ? calculateAge(patient.dob) : null),
+        : (safePatientDB.dob ? calculateAge(safePatientDB.dob) : null),
       gender: extractedPatient.gender && extractedPatient.gender.trim() !== '' 
         ? extractedPatient.gender 
-        : (patient.gender || null),
+        : (safePatientDB.gender || null),
       room_number: extractedPatient.room_number && extractedPatient.room_number.trim() !== '' 
         ? extractedPatient.room_number 
-        : (patient.room_number || null),
+        : (safePatientDB.room_number || null),
       unit: extractedPatient.unit && extractedPatient.unit.trim() !== '' 
         ? extractedPatient.unit 
-        : (patient.unit || null)
+        : (safePatientDB.unit || null)
     };
 
     // Compter les champs présents pour ajuster la hauteur
@@ -349,7 +389,7 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
       doc.fontSize(11)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text(patientInfo.full_name, leftColumnX + 100, infoY, { width: 200 });
+         .text(safe(patientInfo.full_name), leftColumnX + 100, infoY, { width: 200 });
       infoY += 18;
       doc.fontSize(9).fillColor(colors.textLight).font('Helvetica');
     }
@@ -359,7 +399,7 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
       doc.fontSize(11)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text(patientInfo.age, leftColumnX + 50, infoY, { width: 100 });
+         .text(safe(patientInfo.age), leftColumnX + 50, infoY, { width: 100 });
       infoY += 18;
       doc.fontSize(9).fillColor(colors.textLight).font('Helvetica');
     }
@@ -369,7 +409,7 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
       doc.fontSize(11)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text(patientInfo.gender, leftColumnX + 60, infoY, { width: 100 });
+         .text(safe(patientInfo.gender), leftColumnX + 60, infoY, { width: 100 });
       infoY += 18;
       doc.fontSize(9).fillColor(colors.textLight).font('Helvetica');
     }
@@ -379,7 +419,7 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
       doc.fontSize(11)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text(patientInfo.room_number, leftColumnX + 80, infoY, { width: 100 });
+         .text(safe(patientInfo.room_number), leftColumnX + 80, infoY, { width: 100 });
     }
 
     // Informations infirmière (droite)
@@ -393,7 +433,7 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
       doc.fontSize(11)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text(user.full_name, rightColumnX + 80, infoY, { width: 200 });
+         .text(safe(user.full_name), rightColumnX + 80, infoY, { width: 200 });
       infoY += 18;
     }
 
@@ -403,7 +443,7 @@ async function generatePDF({ patient, transcriptionText, structuredJson, recorde
       doc.fontSize(11)
          .fillColor(colors.text)
          .font('Helvetica-Bold')
-         .text(patientInfo.unit || user?.service || '', rightColumnX + 100, infoY, { width: 200 });
+         .text(safe(patientInfo.unit || user?.service), rightColumnX + 100, infoY, { width: 200 });
     }
 
     // Position Y après les informations

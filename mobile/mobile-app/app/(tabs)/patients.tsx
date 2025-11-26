@@ -1,0 +1,51 @@
+/**
+ * Écran Patients - Placeholder
+ */
+
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function PatientsScreen() {
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="auto" />
+      <View style={styles.content}>
+        <Ionicons name="people-outline" size={64} color="#8E8E93" />
+        <Text style={styles.title}>Patients</Text>
+        <Text style={styles.description}>
+          Liste des patients — à venir
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F5F7',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 16,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+});
+

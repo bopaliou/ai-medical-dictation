@@ -1,8 +1,8 @@
 /**
- * Écran d'accueil - Dashboard infirmière - Design moderne
+ * Écran Dashboard Home - Design médical moderne
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,76 +10,196 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
-  Alert,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import PatientSelectionModal, { PatientSelectionResult } from '@/components/PatientSelectionModal';
+import { notesApiService, Note } from '@/services/notesApi';
 
-interface ActionCardProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  description: string;
-  onPress: () => void;
-  color?: string;
+interface RecentFileItemProps {
+  note: Note;
+  onPress?: () => void;
 }
 
-function ActionCard({ icon, title, description, onPress, color = '#007AFF' }: ActionCardProps) {
+function RecentFileItem({ note, onPress }: RecentFileItemProps) {
+  // Formater le nom du fichier depuis l'URL PDF ou créer un nom par défaut
+  const getFileName = () => {
+    if (note.pdf_url) {
+      const urlParts = note.pdf_url.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      return fileName || 'Note.pdf';
+    }
+    // Créer un nom basé sur la date
+    const date = new Date(note.created_at);
+    const dateStr = date.toISOString().split('T')[0].replace(/-/g, '_');
+    return `Note_${dateStr}.pdf`;
+  };
+
+  // Formater la date relative
+  const getRelativeDate = () => {
+    const now = new Date();
+    const noteDate = new Date(note.created_at || note.recorded_at || now);
+    const diffMs = now.getTime() - noteDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'À l\'instant';
+    if (diffMins < 60) return `Il y a ${diffMins} min`;
+    if (diffHours < 24) return `Il y a ${diffHours} h`;
+    if (diffDays === 1) return 'Hier';
+    if (diffDays < 7) return `Il y a ${diffDays} jours`;
+    
+    // Format date complète si plus ancien
+    return noteDate.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const patientName = note.patients?.full_name || 'Patient inconnu';
+
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={styles.fileItem}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
-        <Ionicons name={icon} size={28} color={color} />
+      <View style={styles.fileIconContainer}>
+        <Ionicons name="document-text" size={24} color="#007AFF" />
       </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardDescription}>{description}</Text>
+      <View style={styles.fileContent}>
+        <Text style={styles.fileName} numberOfLines={1}>
+          {getFileName()}
+        </Text>
+        <Text style={styles.filePatient}>{patientName}</Text>
+        <Text style={styles.fileDate}>{getRelativeDate()}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={22} color="#C7C7CC" />
+      <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
     </TouchableOpacity>
   );
 }
 
-export default function HomeScreen() {
+export default function DashboardScreen() {
   const router = useRouter();
-  const { user, logout } = useAuth();
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { user } = useAuth();
+  const [showPatientModal, setShowPatientModal] = useState(false);
+  const [recentNotes, setRecentNotes] = useState<Note[]>([]);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(true);
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Déconnexion',
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await logout();
-              await new Promise(resolve => setTimeout(resolve, 300));
-              router.replace('/login');
-            } catch (error) {
-              console.error('Erreur lors de la déconnexion:', error);
-              setIsLoggingOut(false);
-            }
-          },
-        },
-      ]
-    );
+  const firstName = user?.full_name?.split(' ')[0] || '';
+
+  // Fonction pour charger les notes récentes
+  const loadRecentNotes = async () => {
+    try {
+      setIsLoadingNotes(true);
+      const notes = await notesApiService.getRecentNotes(10);
+      setRecentNotes(notes);
+    } catch (error: any) {
+      console.error('Erreur lors du chargement des notes récentes:', error);
+      // En cas d'erreur, on garde un tableau vide
+      setRecentNotes([]);
+    } finally {
+      setIsLoadingNotes(false);
+    }
   };
 
-  const firstName = user?.full_name?.split(' ')[0] || 'infirmière';
+  // Charger les notes récentes au montage et quand l'écran est focus
+  useEffect(() => {
+    loadRecentNotes();
+  }, []);
+
+  // Recharger quand l'écran est focus (pour éviter d'afficher des rapports supprimés)
+  useEffect(() => {
+    const unsubscribe = router.addListener?.('focus', () => {
+      loadRecentNotes();
+    });
+    return unsubscribe;
+  }, [router]);
+
+  const handleNotePress = (note: Note) => {
+    // Vérifier que la note a un PDF (c'est un rapport généré)
+    if (!note.pdf_url) {
+      console.warn('⚠️ Note sans PDF - impossible d\'ouvrir les détails');
+      Alert.alert(
+        'Rapport non disponible',
+        'Ce rapport n\'a pas encore été généré. Veuillez générer le PDF depuis l\'écran d\'édition.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Navigation vers l'écran de détails du rapport
+    if (note.id) {
+      router.push({
+        pathname: '/report/details',
+        params: { reportId: note.id },
+      });
+    } else if (note.pdf_url) {
+      // Fallback: ouvrir le PDF directement si pas d'ID
+      console.log('Ouverture du PDF:', note.pdf_url);
+      router.push({
+        pathname: '/pdf-viewer',
+        params: { pdf_url: note.pdf_url, report_id: note.id || '' },
+      });
+    }
+  };
+
+  const handleNewDictation = () => {
+    setShowPatientModal(true);
+  };
+
+  const handlePatientSelected = (result: PatientSelectionResult) => {
+    console.log('🔵 handlePatientSelected appelé avec:', result);
+    setShowPatientModal(false);
+    
+    // Construire les paramètres de route
+    const params: Record<string, string> = {
+      patientId: result.patientId || '',
+      skip: result.skip ? 'true' : 'false',
+    };
+    
+    if (result.patientData) {
+      params.patientData = JSON.stringify(result.patientData);
+    }
+    
+    console.log('🔵 Navigation vers /record avec params:', params);
+    
+    // Utiliser un délai pour s'assurer que le modal est fermé
+    setTimeout(() => {
+      try {
+        // Construire l'URL avec les paramètres de requête
+        const queryString = Object.entries(params)
+          .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+          .join('&');
+        
+        const fullPath = `/record?${queryString}`;
+        console.log('🔵 Chemin complet:', fullPath);
+        
+        // Essayer avec router.push et un chemin absolu
+        router.push(fullPath as any);
+        console.log('✅ Navigation effectuée avec router.push');
+      } catch (error) {
+        console.error('❌ Erreur lors de la navigation:', error);
+        // Fallback: essayer avec router.replace
+        try {
+          router.replace({
+            pathname: '/record',
+            params,
+          } as any);
+          console.log('✅ Navigation effectuée avec router.replace (fallback)');
+        } catch (error2) {
+          console.error('❌ Erreur avec router.replace aussi:', error2);
+        }
+      }
+    }, 300);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -89,61 +209,73 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Text style={styles.greeting}>
-              Bonjour, {firstName} 👩‍⚕️
-            </Text>
-            <Text style={styles.subtitle}>Que souhaitez-vous faire aujourd&apos;hui ?</Text>
-          </View>
-          <TouchableOpacity 
-            onPress={handleLogout} 
-            style={styles.logoutButton}
-            disabled={isLoggingOut}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            {isLoggingOut ? (
-              <ActivityIndicator color="#FF3B30" size="small" />
-            ) : (
-              <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
-            )}
-          </TouchableOpacity>
+          <Text style={styles.title}>Dashboard</Text>
+          {firstName && (
+            <Text style={styles.subtitle}>Bonjour, {firstName}</Text>
+          )}
         </View>
 
-        <View style={styles.actionsContainer}>
-          <ActionCard
-            icon="mic"
-            title="Enregistrer une note vocale"
-            description="Dictez une observation, nous structurons automatiquement en SOAPIE."
-            onPress={() => router.push('/record')}
-            color="#007AFF"
-          />
+        {/* Bouton Nouvelle Dictée */}
+        <TouchableOpacity
+          style={styles.newDictationButton}
+          onPress={handleNewDictation}
+          activeOpacity={0.8}
+        >
+          <View style={styles.newDictationContent}>
+            <View style={styles.micIconContainer}>
+              <Ionicons name="mic" size={28} color="#FFFFFF" />
+            </View>
+            <Text style={styles.newDictationText}>NOUVELLE DICTÉE</Text>
+          </View>
+        </TouchableOpacity>
 
-          <ActionCard
-            icon="document-text"
-            title="Notes récentes"
-            description="Relisez les notes générées récemment."
-            onPress={() => router.push('/notes' as any)}
-            color="#34C759"
-          />
+        {/* Section Recent Files */}
+        <View style={styles.recentFilesSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent files</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/notes' as any)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.seeAllText}>Voir tout</Text>
+            </TouchableOpacity>
+          </View>
 
-          <ActionCard
-            icon="people"
-            title="Patients"
-            description="Consultez les fiches patient."
-            onPress={() => router.push('/patients' as any)}
-            color="#FF9500"
-          />
-
-          <ActionCard
-            icon="settings"
-            title="Paramètres"
-            description="Gérez vos préférences et paramètres de l'application."
-            onPress={() => router.push('/settings')}
-            color="#8E8E93"
-          />
+          <View style={styles.filesList}>
+            {isLoadingNotes ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.loadingText}>Chargement des notes...</Text>
+              </View>
+            ) : recentNotes.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="document-text-outline" size={48} color="#C7C7CC" />
+                <Text style={styles.emptyText}>Aucune note récente</Text>
+                <Text style={styles.emptySubtext}>Créez votre première dictée</Text>
+              </View>
+            ) : (
+              recentNotes
+                .filter((note) => note.pdf_url) // Filtrer uniquement les notes avec PDF (rapports générés)
+                .map((note) => (
+                  <RecentFileItem
+                    key={note.id}
+                    note={note}
+                    onPress={() => handleNotePress(note)}
+                  />
+                ))
+            )}
+          </View>
         </View>
       </ScrollView>
+
+      {/* Modal de sélection de patient */}
+      <PatientSelectionModal
+        visible={showPatientModal}
+        onClose={() => setShowPatientModal(false)}
+        onSelect={handlePatientSelected}
+      />
     </SafeAreaView>
   );
 }
@@ -157,80 +289,145 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 24,
+    padding: 20,
     paddingBottom: 40,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 32,
+    marginBottom: 24,
     marginTop: Platform.OS === 'ios' ? 8 : 16,
   },
-  headerContent: {
-    flex: 1,
-    paddingRight: 16,
-  },
-  greeting: {
-    fontSize: 32,
+  title: {
+    fontSize: 34,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 8,
+    marginBottom: 4,
     letterSpacing: -0.5,
-    lineHeight: 40,
   },
   subtitle: {
     fontSize: 16,
     color: '#6E6E73',
-    lineHeight: 22,
+    marginTop: 4,
   },
-  logoutButton: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: '#FFF0F0',
+  newDictationButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    marginBottom: 32,
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  actionsContainer: {
-    gap: 16,
+  newDictationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  card: {
+  micIconContainer: {
+    marginRight: 12,
+  },
+  newDictationText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  recentFilesSection: {
+    marginTop: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    letterSpacing: -0.3,
+  },
+  seeAllText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  filesList: {
+    gap: 12,
+  },
+  fileItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 4,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+  fileIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
-  cardContent: {
+  fileContent: {
     flex: 1,
   },
-  cardTitle: {
-    fontSize: 17,
+  fileName: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#1A1A1A',
-    marginBottom: 6,
-    letterSpacing: -0.2,
+    marginBottom: 4,
   },
-  cardDescription: {
+  filePatient: {
     fontSize: 14,
     color: '#6E6E73',
-    lineHeight: 20,
+    marginBottom: 2,
+  },
+  fileDate: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  loadingContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  emptyContainer: {
+    padding: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6E6E73',
+  },
+  emptySubtext: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#8E8E93',
   },
 });

@@ -131,7 +131,6 @@ const upload = multer({
  */
 router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single('audio'), async (req, res) => {
   let audioFilePath = null;
-  let pdfFilePath = null;
 
   try {
     // Validation des paramètres
@@ -140,6 +139,19 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
     }
 
     const { patient_id, user_id, recorded_at } = req.body;
+    
+    // Récupérer les données patient si fournies (format: patient[full_name], patient[age], etc.)
+    let patientData = null;
+    if (req.body['patient[full_name]'] || req.body['patient[age]'] || req.body['patient[gender]'] || 
+        req.body['patient[room_number]'] || req.body['patient[unit]']) {
+      patientData = {
+        full_name: req.body['patient[full_name]'] || null,
+        age: req.body['patient[age]'] || null,
+        gender: req.body['patient[gender]'] || null,
+        room_number: req.body['patient[room_number]'] || null,
+        unit: req.body['patient[unit]'] || null
+      };
+    }
 
     // user_id n'est plus nécessaire car on utilise req.user.id
     audioFilePath = req.file.path;
@@ -147,7 +159,8 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
     const userId = req.user.id;
 
     let patient;
-    let patient_id_final;
+    let patient_id_final = null; // Initialiser à null pour détecter les cas non initialisés
+    let patient_created = false;
 
     // Si patient_id est fourni, vérifier qu'il existe
     if (patient_id) {
@@ -158,13 +171,40 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
       } catch (error) {
         return res.status(404).json({ error: 'Patient non trouvé' });
       }
+    } else if (patientData && patientData.full_name && patientData.full_name.trim()) {
+      // Si des données patient sont fournies mais pas de patient_id, créer le patient
+      console.log('Création du patient depuis les données fournies...');
+      try {
+        patient = await createPatient(patientData);
+        patient_id_final = patient.id;
+        patient_created = true;
+        console.log(`✅ Patient créé: ${patient_id_final} - ${patient.full_name}`);
+      } catch (error) {
+        console.error('Erreur lors de la création du patient:', error);
+        // Ne pas continuer si la création échoue - on attendra l'extraction depuis l'audio
+        // patient_id_final reste null, sera défini plus tard lors de l'extraction
+        console.log('⚠️ Continuation sans patient - extraction depuis l\'audio...');
+      }
     } else {
-      console.log('Upload audio sans patient_id - extraction depuis l\'audio...');
+      console.log('Upload audio sans patient_id ni données patient - extraction depuis l\'audio...');
     }
 
     // Étape 1: Transcription via Whisper
     console.log('Étape 1: Transcription...');
     let transcriptionText = await transcribeAudio(audioFilePath);
+    
+    // Vérifier que la transcription a retourné du texte
+    if (!transcriptionText || transcriptionText.trim().length === 0) {
+      console.error('❌ ERREUR: La transcription est vide');
+      return res.status(400).json({
+        error: 'TRANSCRIPTION_EMPTY',
+        message: 'La transcription audio a échoué ou est vide. Vérifiez que le fichier audio contient de la parole.',
+        details: 'Le fichier audio n\'a pas pu être transcrit. Assurez-vous que le fichier contient de la parole audible.'
+      });
+    }
+    
+    console.log(`✅ Transcription réussie (${transcriptionText.length} caractères)`);
+    console.log(`📝 Aperçu transcription: ${transcriptionText.substring(0, 200)}...`);
 
     // Étape 1.5: Nettoyage de la transcription (correction fautes courantes)
     const { cleanTranscription } = require('../services/cleanTranscription');
@@ -176,6 +216,7 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
 
     // Étape 2: Structuration SOAPIE via Gemini (utilise transcriptionText nettoyé de Whisper)
     console.log('Étape 2: Structuration SOAPIE...');
+    console.log(`📋 Longueur du texte à structurer: ${transcriptionText.length} caractères`);
     let structuredJson;
     try {
       structuredJson = await structureSOAPIE(transcriptionText);
@@ -185,21 +226,94 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
         throw new Error('La structuration n\'a pas retourné de données patient ou soapie valides');
       }
       
+      // Vérifier si les données sont vides (tous les champs sont vides)
+      const hasPatientData = structuredJson.patient && (
+        structuredJson.patient.full_name?.trim() ||
+        structuredJson.patient.age?.trim() ||
+        structuredJson.patient.gender?.trim()
+      );
+      
+      const hasSOAPIEData = structuredJson.soapie && (
+        structuredJson.soapie.S?.trim() ||
+        structuredJson.soapie.A?.trim() ||
+        structuredJson.soapie.I?.length > 0 ||
+        structuredJson.soapie.E?.trim() ||
+        structuredJson.soapie.P?.trim() ||
+        structuredJson.soapie.O?.exam?.trim() ||
+        structuredJson.soapie.O?.labs?.trim() ||
+        (structuredJson.soapie.O?.medications && structuredJson.soapie.O.medications.length > 0)
+      );
+      
+      if (!hasPatientData && !hasSOAPIEData) {
+        console.warn('⚠️ ATTENTION: La structuration a retourné un objet vide (tous les champs sont vides)');
+        console.warn('⚠️ Cela peut indiquer que:');
+        console.warn('   1. La transcription est de mauvaise qualité');
+        console.warn('   2. Le modèle Gemini n\'a pas pu extraire d\'informations');
+        console.warn('   3. Le prompt système est trop strict');
+        console.warn(`📝 Transcription originale (${transcriptionText.length} caractères):`);
+        console.warn(transcriptionText.substring(0, 500));
+      }
+      
       console.log('✅ Structuration réussie');
       console.log('Patient extrait:', structuredJson.patient?.full_name || '(non identifié)');
       console.log('SOAPIE présent:', !!structuredJson.soapie);
+      console.log('Données patient présentes:', hasPatientData);
+      console.log('Données SOAPIE présentes:', hasSOAPIEData);
     } catch (structError) {
       console.error('❌ Erreur lors de la structuration SOAPIE:', structError);
+      
+      // Vérifier si c'est une erreur 503 (overloaded)
+      const isOverloaded = structError.message?.includes('503') || 
+                          structError.message?.includes('overloaded') || 
+                          structError.message?.includes('UNAVAILABLE') ||
+                          structError.status === 503;
       
       // Extraire le raw output si disponible dans l'erreur
       const rawSnippet = structError.rawSnippet || structError.message?.substring(0, 500) || 'Non disponible';
       
-      return res.status(400).json({
-        error: 'STRUCTURATION_FAILED',
-        message: 'Échec de la structuration SOAPIE. Le modèle n\'a pas retourné de JSON valide.',
-        details: structError.message,
-        rawModelOutput: rawSnippet
-      });
+      // Si c'est une erreur 503, retourner un structured_json minimal pour permettre la continuation
+      if (isOverloaded) {
+        console.warn('⚠️ Modèle Gemini surchargé (503). Retour d\'un structured_json minimal.');
+        structuredJson = {
+          patient: {
+            full_name: '',
+            age: '',
+            gender: '',
+            room_number: '',
+            unit: ''
+          },
+          soapie: {
+            S: '',
+            O: {
+              vitals: {
+                temperature: '',
+                blood_pressure: '',
+                heart_rate: '',
+                respiratory_rate: '',
+                spo2: '',
+                glycemia: ''
+              },
+              exam: '',
+              labs: '',
+              medications: []
+            },
+            A: '',
+            I: [],
+            E: '',
+            P: ''
+          }
+        };
+        console.log('✅ Structured_json minimal créé pour permettre la continuation manuelle');
+        // Continuer avec le structured_json minimal au lieu de retourner une erreur
+      } else {
+        // Autre erreur, retourner une erreur 400
+        return res.status(400).json({
+          error: 'STRUCTURATION_FAILED',
+          message: 'Échec de la structuration SOAPIE. Le modèle n\'a pas retourné de JSON valide.',
+          details: structError.message,
+          rawModelOutput: rawSnippet
+        });
+      }
     }
     
     // Si patient_id n'était pas fourni, créer un patient depuis les informations extraites
@@ -279,59 +393,73 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
       patient_id_final = patient_id;
     }
 
-    // Étape 3: Génération PDF
-    console.log('Étape 3: Génération PDF...');
-    
-    // Récupération des informations de l'infirmière depuis req.user
-    const nurseInfo = {
-      full_name: req.user.full_name || req.user.user_metadata?.full_name || 'Infirmière',
-      service: req.user.service || req.user.user_metadata?.service || 'Service',
-      role: req.user.role || req.user.user_metadata?.role || 'nurse'
-    };
-    
-    pdfFilePath = await generatePDF({
-      patient,
-      transcriptionText,
-      structuredJson,
-      recordedAt,
-      createdAt: new Date(),
-      user: nurseInfo
-    });
+    // Vérifier que patient_id_final est défini avant de continuer
+    if (!patient_id_final) {
+      console.error('❌ ERREUR: patient_id_final n\'est pas défini après l\'extraction');
+      return res.status(500).json({
+        error: 'Erreur lors de la création du patient',
+        message: 'Impossible de créer ou identifier le patient. Veuillez réessayer.'
+      });
+    }
 
-    // Étape 4: Upload audio vers Supabase Storage
-    console.log('Étape 4: Upload audio...');
+    // Étape 3: Upload audio vers Supabase Storage (sans générer le PDF pour l'instant)
+    console.log('Étape 3: Upload audio...');
     const audioFileName = `audio/${patient_id_final}/${Date.now()}-${req.file.filename}`;
-    const audioUploadResult = await uploadAudio(audioFilePath, audioFileName);
+    let audioUploadResult;
+    try {
+      audioUploadResult = await uploadAudio(audioFilePath, audioFileName);
+      console.log(`✅ Audio uploadé avec succès: ${audioUploadResult.url}`);
+    } catch (uploadError) {
+      console.error('❌ Erreur lors de l\'upload audio:', uploadError);
+      // Ne pas bloquer le processus, continuer sans audio_url
+      audioUploadResult = {
+        url: null,
+        path: null
+      };
+      console.warn('⚠️ Continuation sans audio_url - la note sera créée sans lien audio');
+    }
 
-    // Étape 5: Upload PDF vers Supabase Storage
-    console.log('Étape 5: Upload PDF...');
-    const pdfFileName = `pdfs/${patient_id_final}/${Date.now()}-note.pdf`;
-    const pdfUploadResult = await uploadPDF(pdfFilePath, pdfFileName);
+    // NOTE: Le PDF ne sera PAS généré automatiquement lors de l'upload
+    // Il sera généré uniquement lorsque l'utilisateur clique sur "Générer le rapport PDF"
+    // dans l'écran d'édition via l'endpoint /api/report/generate
+    console.log('ℹ️ PDF non généré automatiquement - sera généré lors de l\'édition');
 
-    // Étape 6: Insertion dans la base de données
-    console.log('Étape 6: Insertion en base...');
+    // Étape 4: Insertion dans la base de données (sans PDF pour l'instant)
+    console.log('Étape 4: Insertion en base...');
     const noteData = {
       patient_id: patient_id_final,
       created_by: userId,
       recorded_at: recordedAt.toISOString(),
       transcription_text: transcriptionText,
       structured_json: structuredJson,
-      pdf_url: pdfUploadResult.url,
-      audio_url: audioUploadResult.url,
+      pdf_url: null, // PDF sera généré plus tard lors de l'édition
+      audio_url: audioUploadResult?.url || null, // Utiliser l'URL si disponible, sinon null
       synced: true
     };
 
+    console.log('📝 Données de la note à insérer:', {
+      patient_id: noteData.patient_id,
+      created_by: noteData.created_by,
+      audio_url: noteData.audio_url ? 'présent' : 'absent',
+      transcription_length: noteData.transcription_text?.length || 0
+    });
+
     const note = await insertNote(noteData);
+    
+    console.log(`✅ Note insérée avec succès: ${note.id}`);
+    console.log(`   audio_url dans la note: ${note.audio_url || 'null'}`);
 
     // Nettoyage des fichiers temporaires
     deleteTemporaryFile(audioFilePath);
-    deleteTemporaryFile(pdfFilePath);
 
     console.log(`Note créée avec succès: ${note.id}`);
 
     // Réponse
     res.status(201).json({
       ok: true,
+      transcription: transcriptionText,
+      structured_json: structuredJson,
+      pdf_url: null, // PDF sera généré lors de l'édition
       note: {
         id: note.id,
         patient_id: note.patient_id,
@@ -342,7 +470,8 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
         audio_url: note.audio_url,
         created_at: note.created_at
       },
-      patient_created: !patient_id // Indique si un nouveau patient a été créé
+      patient_created: patient_created || !patient_id, // Indique si un nouveau patient a été créé
+      patient: patient || null // Retourner le patient créé ou existant
     });
 
   } catch (error) {
@@ -351,9 +480,6 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
     // Nettoyage en cas d'erreur
     if (audioFilePath) {
       deleteTemporaryFile(audioFilePath);
-    }
-    if (pdfFilePath) {
-      deleteTemporaryFile(pdfFilePath);
     }
 
     res.status(500).json({

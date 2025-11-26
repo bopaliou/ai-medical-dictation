@@ -1,0 +1,343 @@
+/**
+ * Service API pour la gestion des patients
+ */
+
+import axios, { AxiosError } from 'axios';
+import { API_CONFIG } from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isTokenExpiredError, handleTokenExpiration } from '../utils/authInterceptor';
+
+export interface Patient {
+  id: string;
+  full_name: string;
+  age?: string;
+  gender?: string;
+  room_number?: string;
+  unit?: string;
+  dob?: string;
+  created_at?: string;
+}
+
+export interface CreatePatientData {
+  full_name: string;
+  age?: string;
+  gender?: 'M' | 'F' | 'Autre' | 'Non précisé' | string;
+  room_number?: string;
+  unit?: string;
+  dob?: string;
+}
+
+export interface SearchPatientsResponse {
+  ok: boolean;
+  patients: Patient[];
+}
+
+export interface CreatePatientResponse {
+  ok: boolean;
+  patient: Patient;
+}
+
+const CACHE_KEY = 'patients_cache';
+const CACHE_EXPIRY_KEY = 'patients_cache_expiry';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+class PatientsApiService {
+  private baseURL: string;
+
+  constructor() {
+    this.baseURL = API_CONFIG.BASE_URL;
+  }
+
+  /**
+   * Récupère le token d'authentification depuis AsyncStorage
+   */
+  private async getAuthToken(): Promise<string | null> {
+    try {
+      const token = await AsyncStorage.getItem('@auth_token');
+      if (!token) {
+        console.warn('⚠️ Aucun token trouvé dans AsyncStorage');
+        return null;
+      }
+      // Vérifier que le token n'est pas vide
+      if (token.trim().length === 0) {
+        console.warn('⚠️ Token vide dans AsyncStorage');
+        return null;
+      }
+      console.log('✅ Token récupéré (premiers 30 caractères):', token.substring(0, 30) + '...');
+      return token;
+    } catch (error) {
+      console.error('Erreur lors de la récupération du token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Recherche de patients avec autocomplete
+   */
+  async searchPatients(query: string): Promise<Patient[]> {
+    try {
+      const token = await this.getAuthToken();
+      if (!token) {
+        throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
+      }
+
+      console.log('🔍 Recherche de patients avec query:', query);
+      console.log('📡 URL:', `${this.baseURL}/api/patients`);
+      console.log('🔑 Token présent:', !!token);
+
+      const response = await axios.get<SearchPatientsResponse>(
+        `${this.baseURL}/api/patients`,
+        {
+          params: { query },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        }
+      ).catch((error) => {
+        // Log détaillé en cas d'erreur 401
+        if (error.response?.status === 401) {
+          console.error('❌ Erreur 401 - Token invalide ou expiré');
+          console.error('Token utilisé (premiers 50 caractères):', token.substring(0, 50) + '...');
+          console.error('URL:', `${this.baseURL}/api/patients`);
+          console.error('Réponse backend:', error.response?.data);
+        }
+        throw error;
+      });
+
+      if (response.data.ok && response.data.patients) {
+        // Mettre à jour le cache
+        await this.updateCache(response.data.patients);
+        return response.data.patients;
+      }
+
+      return [];
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la recherche de patients:', error);
+      
+      // Gestion spécifique des erreurs 401
+      if (error.response?.status === 401) {
+        console.error('🔒 Erreur 401 - Token invalide ou expiré');
+        console.error('💡 Solution: Reconnectez-vous pour obtenir un nouveau token');
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      
+      // En cas d'erreur, essayer de retourner le cache
+      const cachedPatients = await this.getCachedPatients();
+      if (cachedPatients.length > 0 && query) {
+        // Filtrer le cache local
+        const searchTerm = query.toLowerCase();
+        return cachedPatients.filter(p => 
+          p.full_name.toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère tous les patients
+   */
+  async getAllPatients(): Promise<Patient[]> {
+    try {
+      const token = await this.getAuthToken();
+      if (!token) {
+        throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
+      }
+
+      console.log('📋 Récupération de tous les patients');
+      console.log('📡 URL:', `${this.baseURL}/api/patients`);
+
+      const response = await axios.get<SearchPatientsResponse>(
+        `${this.baseURL}/api/patients`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        }
+      ).catch(async (error) => {
+        // Log détaillé en cas d'erreur 401
+        if (error.response?.status === 401) {
+          console.error('❌ Erreur 401 lors de getAllPatients');
+          console.error('Token utilisé (premiers 50 caractères):', token.substring(0, 50) + '...');
+          console.error('URL:', `${this.baseURL}/api/patients`);
+          console.error('Réponse backend:', error.response?.data);
+          
+          // Si le token est expiré, déconnecter automatiquement
+          if (isTokenExpiredError(error)) {
+            console.error('💡 Token expiré - Déconnexion automatique...');
+            await handleTokenExpiration();
+            throw new Error('TOKEN_EXPIRED');
+          }
+          
+          console.error('💡 Le token peut être expiré. Essayez de vous reconnecter.');
+        }
+        throw error;
+      });
+
+      if (response.data.ok && response.data.patients) {
+        // Mettre à jour le cache
+        await this.updateCache(response.data.patients);
+        return response.data.patients;
+      }
+
+      return [];
+    } catch (error: any) {
+      console.error('Erreur lors de la récupération des patients:', error);
+      
+      // Si erreur 401 avec message "expired", le token est expiré
+      if (error.response?.status === 401) {
+        const errorMessage = error.response?.data?.message || '';
+        if (errorMessage.includes('expired') || errorMessage.includes('expiré')) {
+          console.warn('⚠️ Token expiré détecté, suppression du token...');
+          // Supprimer le token expiré
+          await AsyncStorage.removeItem('@auth_token');
+          await AsyncStorage.removeItem('@auth_user');
+          
+          // Lancer une erreur spéciale pour que le composant puisse réagir
+          throw new Error('SESSION_EXPIRED');
+        }
+      }
+      
+      // En cas d'erreur, retourner le cache
+      return await this.getCachedPatients();
+    }
+  }
+
+  /**
+   * Crée un nouveau patient
+   */
+  async createPatient(patientData: CreatePatientData): Promise<Patient> {
+    try {
+      const token = await this.getAuthToken();
+      if (!token) {
+        throw new Error('Non authentifié');
+      }
+
+      const response = await axios.post<CreatePatientResponse>(
+        `${this.baseURL}/api/patients`,
+        patientData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        }
+      );
+
+      if (response.data.ok && response.data.patient) {
+        // Ajouter au cache
+        const cachedPatients = await this.getCachedPatients();
+        cachedPatients.unshift(response.data.patient);
+        await this.updateCache(cachedPatients);
+        
+        return response.data.patient;
+      }
+
+      throw new Error('Réponse invalide du serveur');
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du patient:', error);
+      
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<{ error: string; message?: string }>;
+        
+        console.error('📡 Statut HTTP:', axiosError.response?.status);
+        console.error('📡 Données de réponse:', axiosError.response?.data);
+        console.error('📡 Headers de réponse:', axiosError.response?.headers);
+        
+        if (axiosError.response?.status === 409) {
+          // Patient déjà existant
+          const message = axiosError.response.data?.message || 'Un patient similaire existe déjà';
+          console.error('⚠️ Patient déjà existant:', message);
+          throw new Error(message);
+        }
+        
+        if (axiosError.response?.status === 400) {
+          const message = axiosError.response.data?.message || axiosError.response.data?.error || 'Données invalides';
+          console.error('⚠️ Données invalides:', message);
+          throw new Error(message);
+        }
+        
+        if (axiosError.response?.status === 500) {
+          // Erreur serveur - extraire le message d'erreur du backend
+          const backendMessage = axiosError.response.data?.message || axiosError.response.data?.error;
+          const errorMessage = backendMessage 
+            ? `Erreur serveur: ${backendMessage}` 
+            : 'Erreur serveur lors de la création du patient. Vérifiez les logs du backend.';
+          console.error('❌ Erreur 500 du backend:', backendMessage);
+          throw new Error(errorMessage);
+        }
+        
+        if (axiosError.response?.status === 401) {
+          console.error('❌ Erreur 401 - Token invalide ou expiré');
+          if (isTokenExpiredError(error)) {
+            await handleTokenExpiration();
+            throw new Error('Session expirée. Veuillez vous reconnecter.');
+          }
+          throw new Error('Non authentifié. Veuillez vous reconnecter.');
+        }
+      }
+      
+      throw error instanceof Error ? error : new Error('Erreur lors de la création du patient');
+    }
+  }
+
+  /**
+   * Met à jour le cache local
+   */
+  private async updateCache(patients: Patient[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(patients));
+      await AsyncStorage.setItem(CACHE_EXPIRY_KEY, Date.now().toString());
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du cache:', error);
+    }
+  }
+
+  /**
+   * Récupère les patients depuis le cache
+   */
+  async getCachedPatients(): Promise<Patient[]> {
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const expiry = await AsyncStorage.getItem(CACHE_EXPIRY_KEY);
+      
+      if (!cached || !expiry) {
+        return [];
+      }
+
+      const expiryTime = parseInt(expiry, 10);
+      const now = Date.now();
+
+      // Vérifier si le cache est expiré
+      if (now - expiryTime > CACHE_DURATION) {
+        return [];
+      }
+
+      return JSON.parse(cached) as Patient[];
+    } catch (error) {
+      console.error('Erreur lors de la récupération du cache:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Vide le cache
+   */
+  async clearCache(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(CACHE_KEY);
+      await AsyncStorage.removeItem(CACHE_EXPIRY_KEY);
+    } catch (error) {
+      console.error('Erreur lors du vidage du cache:', error);
+    }
+  }
+}
+
+export const patientsApiService = new PatientsApiService();
+

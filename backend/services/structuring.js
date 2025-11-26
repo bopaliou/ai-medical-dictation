@@ -87,27 +87,92 @@ async function structureSOAPIE(transcriptionText) {
     
     console.log(`Structuration avec le modèle: ${modelName}`);
     
-    // Appel à l'API Gemini (même format que structureTranscription)
+    // Appel à l'API Gemini avec retry pour les erreurs 503 (overloaded)
     let response;
-    try {
-      response = await ai.models.generateContent({
-        model: modelName,
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }],
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Tentative ${attempt}/${maxRetries} d'appel à l'API Gemini...`);
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }],
+            },
+          ],
+          config: {
+            temperature: 0, // Température très basse pour plus de précision
+            topK: 1,
+            maxOutputTokens: 8192, // Augmenté pour permettre une réponse JSON complète
+            responseMimeType: 'application/json', // Forcer la réponse en JSON
           },
-        ],
-        config: {
-          temperature: 0, // Température très basse pour plus de précision
-          topK: 1,
-          maxOutputTokens: 8192, // Augmenté pour permettre une réponse JSON complète
-          responseMimeType: 'application/json', // Forcer la réponse en JSON
-        },
-      });
-    } catch (apiError) {
-      console.error('Erreur API Gemini:', apiError);
-      throw new Error(`Erreur API Gemini: ${apiError.message}`);
+        });
+        // Succès, sortir de la boucle
+        break;
+      } catch (apiError) {
+        lastError = apiError;
+        const errorStatus = apiError.status || apiError.error?.code;
+        const errorMessage = apiError.message || apiError.error?.message || '';
+        
+        console.error(`❌ Erreur API Gemini (tentative ${attempt}/${maxRetries}):`, {
+          status: errorStatus,
+          message: errorMessage,
+          code: apiError.error?.code
+        });
+        
+        // Si c'est une erreur 503 (overloaded) et qu'il reste des tentatives, retry avec backoff
+        if (errorStatus === 503 || errorMessage.includes('overloaded') || errorMessage.includes('UNAVAILABLE')) {
+          if (attempt < maxRetries) {
+            const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Backoff exponentiel: 1s, 2s, 4s (max 5s)
+            console.log(`⏳ Modèle surchargé (503), nouvelle tentative dans ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue; // Réessayer
+          } else {
+            // Toutes les tentatives ont échoué, retourner un structured_json minimal
+            console.warn('⚠️ Toutes les tentatives ont échoué (503). Retour d\'un structured_json minimal pour permettre la continuation manuelle.');
+            return {
+              patient: {
+                full_name: '',
+                age: '',
+                gender: '',
+                room_number: '',
+                unit: ''
+              },
+              soapie: {
+                S: '',
+                O: {
+                  vitals: {
+                    temperature: '',
+                    blood_pressure: '',
+                    heart_rate: '',
+                    respiratory_rate: '',
+                    spo2: '',
+                    glycemia: ''
+                  },
+                  exam: '',
+                  labs: '',
+                  medications: []
+                },
+                A: '',
+                I: [],
+                E: '',
+                P: ''
+              }
+            };
+          }
+        } else {
+          // Autre erreur (non 503), lancer immédiatement
+          throw new Error(`Erreur API Gemini: ${errorMessage || apiError.message}`);
+        }
+      }
+    }
+    
+    // Si on arrive ici sans response, c'est qu'on a épuisé les tentatives
+    if (!response) {
+      throw new Error(`Erreur API Gemini: Le modèle est surchargé. Toutes les tentatives (${maxRetries}) ont échoué.`);
     }
 
     // Accéder au texte directement comme dans structureTranscription (qui fonctionne)

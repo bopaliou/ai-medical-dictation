@@ -51,6 +51,7 @@ const authRoutes = require('../routes/auth');
 const uploadRoutes = require('../routes/upload');
 const patientsRoutes = require('../routes/patients');
 const notesRoutes = require('../routes/notes');
+const reportRoutes = require('../routes/report');
 
 // Configuration Express
 const app = express();
@@ -152,6 +153,23 @@ app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/patients', patientsRoutes);
 app.use('/api/notes', notesRoutes);
+app.use('/api/report', reportRoutes);
+app.use('/api/reports', reportRoutes); // Alias pour GET /api/reports, DELETE /api/reports/:id et PATCH /api/reports/:id
+
+// Log des routes enregistrées (en développement)
+if (process.env.NODE_ENV !== 'production') {
+  console.log('\n📋 Routes API enregistrées:');
+  console.log('   GET    /api/reports - Liste des rapports');
+  console.log('   POST   /api/report/generate - Génération PDF');
+  console.log('   DELETE /api/reports/:id - Suppression rapport');
+  console.log('   PATCH  /api/reports/:id - Mise à jour statut\n');
+  
+  // Test de la route GET /api/reports (sans authentification pour le test)
+  console.log('🔍 Test de la route GET /api/reports...');
+  console.log('   URL complète: http://localhost:3000/api/reports');
+  console.log('   Méthode: GET');
+  console.log('   Authentification requise: Oui (Bearer token)\n');
+}
 
 // Route 404 - Doit être la dernière route définie
 app.use((req, res) => {

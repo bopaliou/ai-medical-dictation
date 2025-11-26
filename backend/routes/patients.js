@@ -10,7 +10,8 @@ const {
   getPatientById,
   createPatient,
   getAllPatients,
-  getNotesByPatient
+  getNotesByPatient,
+  searchPatients
 } = require('../services/supabase');
 
 const router = express.Router();
@@ -47,6 +48,15 @@ const router = express.Router();
  */
 router.get('/', authenticate, authorize(['nurse', 'admin', 'auditor']), async (req, res) => {
   try {
+    const { query } = req.query;
+    
+    // Si un paramètre query est fourni, faire une recherche
+    if (query) {
+      const patients = await searchPatients(query, 20);
+      return res.json({ ok: true, patients });
+    }
+    
+    // Sinon, retourner tous les patients
     const patients = await getAllPatients();
     res.json({ ok: true, patients });
   } catch (error) {
@@ -182,7 +192,7 @@ router.get('/:id', authenticate, authorize(['nurse', 'admin', 'auditor']), async
  */
 router.post('/', authenticate, authorize(['nurse', 'admin']), async (req, res) => {
   try {
-    const { full_name, gender, dob } = req.body;
+    const { full_name, gender, dob, age, room_number, unit } = req.body;
 
     // Validation
     if (!full_name || full_name.trim().length === 0) {
@@ -193,18 +203,98 @@ router.post('/', authenticate, authorize(['nurse', 'admin']), async (req, res) =
     const patientData = {
       full_name: full_name.trim(),
       gender: gender || null,
-      dob: dob || null
+      dob: dob || null,
+      age: age || null,
+      room_number: room_number || null,
+      unit: unit || null
     };
 
+    // Vérifier si un patient similaire existe déjà (éviter les doublons)
+    // Recherche par nom + room_number si fourni
+    // Note: room_number peut ne pas exister dans la base, donc on vérifie d'abord
+    if (room_number && room_number.trim()) {
+      try {
+        const existingPatients = await searchPatients(full_name.trim(), 10);
+        // Chercher un doublon : même nom ET même room_number
+        // IMPORTANT : on ne considère comme doublon QUE si :
+        // 1. Le patient existant a le même nom (insensible à la casse)
+        // 2. Le patient existant a un room_number (non vide, non null, non undefined)
+        // 3. Le room_number du patient existant correspond exactement au room_number fourni
+        // 
+        // Un patient sans room_number n'est PAS un doublon (on peut avoir plusieurs patients 
+        // avec le même nom dans des chambres différentes)
+        const duplicate = existingPatients.find((p) => {
+          // Étape 1: Vérifier que le nom correspond (insensible à la casse)
+          if (!p.full_name) {
+            return false; // Pas de nom = pas de match
+          }
+          const nameMatches = p.full_name.toLowerCase().trim() === full_name.trim().toLowerCase();
+          if (!nameMatches) {
+            return false; // Nom différent = pas de doublon
+          }
+          
+          // Étape 2: Vérifier que le patient existant a un room_number valide
+          // IMPORTANT: On vérifie explicitement que room_number existe et n'est pas vide
+          // On ne doit JAMAIS matcher un patient sans room_number
+          if (!p.room_number || typeof p.room_number !== 'string' || p.room_number.trim().length === 0) {
+            return false; // Pas de room_number valide = pas de doublon
+          }
+          
+          // Étape 3: Vérifier que les room_number correspondent exactement
+          // À ce stade, on est sûr que p.room_number existe et est une string non vide
+          const roomMatches = p.room_number.trim() === room_number.trim();
+          
+          // Doublon uniquement si les trois conditions sont remplies
+          return nameMatches && roomMatches; // hasRoomNumber est déjà vérifié ci-dessus
+        });
+        
+        if (duplicate) {
+          // Vérification de sécurité supplémentaire : s'assurer que duplicate.room_number existe
+          // (ne devrait jamais être nécessaire vu la logique ci-dessus, mais par sécurité)
+          if (!duplicate.room_number) {
+            console.error('❌ ERREUR: Doublon détecté mais room_number manquant - cela ne devrait jamais arriver');
+            // Ne pas bloquer la création si cette erreur inattendue se produit
+          } else {
+            console.warn('⚠️ Doublon détecté:', {
+              existing: {
+                id: duplicate.id,
+                full_name: duplicate.full_name,
+                room_number: duplicate.room_number
+              },
+              new: {
+                full_name: full_name.trim(),
+                room_number: room_number.trim()
+              }
+            });
+            return res.status(409).json({
+              error: 'Un patient avec ce nom et ce numéro de chambre existe déjà',
+              patient: duplicate
+            });
+          }
+        }
+      } catch (searchError) {
+        // Si la recherche échoue (par exemple colonnes manquantes), on continue quand même
+        console.warn('⚠️ Erreur lors de la vérification des doublons, continuation de la création:', searchError.message);
+      }
+    }
+
+    console.log('📋 Données patient reçues:', JSON.stringify(patientData, null, 2));
+    
     const patient = await createPatient(patientData);
 
+    console.log('✅ Patient créé avec succès:', patient.id);
     res.status(201).json({
       ok: true,
       patient
     });
   } catch (error) {
-    console.error('Erreur lors de la création du patient:', error);
-    res.status(500).json({ error: 'Erreur lors de la création du patient', message: error.message });
+    console.error('❌ Erreur lors de la création du patient:');
+    console.error('   Message:', error.message);
+    console.error('   Stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Erreur lors de la création du patient', 
+      message: error.message || 'Une erreur inattendue est survenue'
+    });
   }
 });
 

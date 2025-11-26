@@ -8,7 +8,10 @@
     "dev": "nodemon",
     "dev:verbose": "nodemon --verbose --watch server --watch routes --watch services --watch middleware --watch config",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "clear-patients": "node scripts/clear-patients.js",
+    "clear-all-data": "node scripts/clear-all-data.js",
+    "setup-storage": "node scripts/setup-storage-buckets.js"
   },
   "keywords": [
     "medical",
@@ -21,14 +24,15 @@
   "dependencies": {
     "@google/genai": "^1.30.0",
     "@supabase/supabase-js": "^2.38.5",
-    "openai": "^4.20.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
+    "groq-sdk": "^0.5.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
+    "openai": "^4.20.1",
     "pdfkit": "^0.13.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"

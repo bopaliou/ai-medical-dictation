@@ -25,6 +25,11 @@ function RootLayoutNav() {
     const inOnboarding = segments[0] === 'onboarding';
     const inLogin = segments[0] === 'login';
     const inTabs = segments[0] === '(tabs)';
+    const currentRoute = segments[0];
+    
+    // Routes qui sont autorisées même si on n'est pas dans les tabs
+    const allowedRoutes = ['record', 'settings', 'modal', 'report', 'pdf-viewer'];
+    const isAllowedRoute = allowedRoutes.includes(currentRoute);
 
     if (!hasSeenOnboarding) {
       if (!inOnboarding) {
@@ -46,7 +51,8 @@ function RootLayoutNav() {
           return () => clearTimeout(timeoutId);
         }
         
-        if (!inTabs) {
+        // Ne pas rediriger si on est sur une route autorisée (record, settings, etc.)
+        if (!inTabs && !isAllowedRoute) {
           router.replace('/(tabs)');
         }
         return;
@@ -76,6 +82,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="record" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="settings" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="pdf-viewer" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />

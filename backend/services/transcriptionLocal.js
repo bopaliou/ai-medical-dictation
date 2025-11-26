@@ -3,7 +3,7 @@
  * Utilise Whisper.cpp installé localement via WSL pour transcrire les fichiers audio
  */
 
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -110,17 +110,121 @@ function getWSLHomePath() {
 }
 
 /**
+ * Convertit un fichier audio en WAV si nécessaire (pour Whisper CLI)
+ * @param {string} audioFilePath - Chemin du fichier audio source
+ * @returns {Promise<string>} - Chemin du fichier WAV (peut être le même si déjà WAV)
+ */
+async function convertToWAVIfNeeded(audioFilePath) {
+  const ext = path.extname(audioFilePath).toLowerCase();
+  
+  // Si c'est déjà un WAV, pas besoin de conversion
+  if (ext === '.wav') {
+    return audioFilePath;
+  }
+
+  // Formats supportés par Whisper: .wav, .mp3, .m4a, .ogg, .flac
+  // Cependant, pour garantir la meilleure compatibilité, on convertit tout en WAV
+  // sauf si c'est déjà du WAV
+  // Formats à convertir: .m4a, .aac, .mp3, .ogg, .flac
+  const needsConversion = ['.m4a', '.aac', '.mp3', '.ogg', '.flac'].includes(ext);
+  
+  if (!needsConversion) {
+    // Si c'est déjà WAV ou un format non listé, on le laisse tel quel
+    console.log(`ℹ️ Format ${ext} - pas de conversion nécessaire`);
+    return audioFilePath;
+  }
+
+  console.log(`🔄 Conversion de ${ext} en WAV pour Whisper...`);
+  
+  // Créer un fichier temporaire WAV
+  const wavPath = audioFilePath.replace(ext, '.wav');
+  const wslAudioPath = convertWindowsToWSLPath(audioFilePath);
+  const wslWavPath = convertWindowsToWSLPath(wavPath);
+
+  // Vérifier si on est dans WSL
+  const isInWSL = process.env.WSL_DISTRO_NAME || process.env.WSLENV || process.platform !== 'win32';
+  const wslDistro = process.env.WSL_DISTRO || 'Ubuntu';
+  
+  // Utiliser ffmpeg pour convertir
+  // ffmpeg -i input.m4a -ar 16000 -ac 1 -f wav output.wav
+  // -ar 16000 : sample rate 16kHz (recommandé pour Whisper)
+  // -ac 1 : mono (canal unique)
+  // -f wav : format WAV
+  let command;
+  let commandArgs;
+  
+  if (isInWSL) {
+    command = 'ffmpeg';
+    commandArgs = [
+      '-i', wslAudioPath,
+      '-ar', '16000',
+      '-ac', '1',
+      '-f', 'wav',
+      '-y', // Overwrite output file
+      wslWavPath
+    ];
+  } else {
+    command = 'wsl';
+    commandArgs = [
+      '-d', wslDistro,
+      'ffmpeg',
+      '-i', wslAudioPath,
+      '-ar', '16000',
+      '-ac', '1',
+      '-f', 'wav',
+      '-y',
+      wslWavPath
+    ];
+  }
+
+  console.log(`Commande de conversion: ${command} ${commandArgs.join(' ')}`);
+  
+  const result = spawnSync(command, commandArgs, {
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+    shell: false
+  });
+
+  if (result.error) {
+    console.error('Erreur lors de la conversion:', result.error);
+    throw new Error(`Erreur lors de la conversion en WAV: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString() || '';
+    console.error(`ffmpeg a échoué avec le code ${result.status}`);
+    console.error(`Stderr: ${stderr}`);
+    throw new Error(`Erreur lors de la conversion en WAV. Assurez-vous que ffmpeg est installé dans WSL. Erreur: ${stderr}`);
+  }
+
+  // Vérifier que le fichier WAV a été créé
+  if (!fs.existsSync(wavPath)) {
+    throw new Error(`Le fichier WAV n'a pas été créé: ${wavPath}`);
+  }
+
+  console.log(`✅ Conversion réussie: ${wavPath}`);
+  return wavPath;
+}
+
+/**
  * Transcription d'un fichier audio en texte utilisant Whisper.cpp local
  * @param {string} audioFilePath - Chemin local du fichier audio (.m4a, .mp3, .wav, etc.)
  * @returns {Promise<string>} - Texte transcrit
  */
 async function transcribeLocalWhisper(audioFilePath) {
+  let wavFilePath = audioFilePath;
+  let shouldCleanupWav = false;
+  
   try {
     if (!fs.existsSync(audioFilePath)) {
       throw new Error(`Le fichier audio n'existe pas: ${audioFilePath}`);
     }
 
     console.log(`Transcription locale du fichier: ${audioFilePath}`);
+
+    // Convertir en WAV si nécessaire
+    wavFilePath = await convertToWAVIfNeeded(audioFilePath);
+    shouldCleanupWav = wavFilePath !== audioFilePath; // Nettoyer si on a créé un fichier temporaire
 
     // Obtenir les chemins WSL
     // IMPORTANT : Les chemins doivent TOUJOURS être des chemins WSL (Linux), jamais des chemins Windows
@@ -130,7 +234,9 @@ async function transcribeLocalWhisper(audioFilePath) {
     // S'assurer que les chemins sont bien des chemins WSL (commencent par /)
     // Si WHISPER_BIN_PATH est fourni mais est un chemin Windows, le convertir
     let whisperBinPath = process.env.WHISPER_BIN_PATH || `${wslHome}/whisper.cpp/build/bin/whisper-cli`;
-    let whisperModelPath = process.env.WHISPER_MODEL_PATH || `${wslHome}/whisper.cpp/models/ggml-base.bin`;
+    // Utiliser ggml-large-v3 par défaut (modèle de haute qualité)
+    // Peut être surchargé via variable d'environnement WHISPER_MODEL_PATH
+    let whisperModelPath = process.env.WHISPER_MODEL_PATH || `${wslHome}/whisper.cpp/models/ggml-large-v3.bin`;
     
     // Vérifier que les chemins sont bien des chemins WSL (Linux)
     // Les chemins WSL commencent par /, les chemins Windows par C:\ ou une lettre de lecteur
@@ -157,12 +263,13 @@ async function transcribeLocalWhisper(audioFilePath) {
       whisperModelPath = '/' + whisperModelPath;
     }
 
-    // Convertir le chemin de l'audio en chemin WSL
-    const wslAudioPath = convertWindowsToWSLPath(audioFilePath);
+    // Convertir le chemin de l'audio en chemin WSL (utiliser le fichier WAV si conversion effectuée)
+    const wslAudioPath = convertWindowsToWSLPath(wavFilePath);
 
     console.log(`Chemin WSL audio: ${wslAudioPath}`);
     console.log(`Binaire Whisper: ${whisperBinPath}`);
-    console.log(`Modèle: ${whisperModelPath}`);
+    console.log(`🎤 Modèle Whisper: ${whisperModelPath}`);
+    console.log(`   (Modèle large-v3 - Qualité maximale)`);
     console.log(`WSL Home: ${wslHome}`);
 
     // Vérifier que le binaire existe (en essayant de l'exécuter avec --help)
@@ -218,36 +325,76 @@ async function transcribeLocalWhisper(audioFilePath) {
     }
     
     console.log(`Commande complète: ${command} ${commandArgs.join(' ')}`);
-    const result = spawnSync(command, commandArgs, spawnOptions);
-
-    // Vérifier les erreurs
-    if (result.error) {
-      console.error('Erreur spawnSync:', result.error);
-      throw new Error(`Erreur lors de l'exécution de Whisper: ${result.error.message}`);
-    }
-
-    // Logs pour debug
-    if (result.stdout) {
-      console.log('Whisper stdout:', result.stdout.toString());
-    }
-    if (result.stderr) {
-      console.log('Whisper stderr:', result.stderr.toString());
-    }
-
-    if (result.status !== 0) {
-      const stderr = result.stderr?.toString() || result.stderr || 'Erreur inconnue';
-      const stdout = result.stdout?.toString() || result.stdout || '';
-      console.error(`Whisper a échoué avec le code ${result.status}`);
-      console.error(`Commande exécutée: ${command} ${commandArgs.join(' ')}`);
-      console.error(`Stderr: ${stderr}`);
-      console.error(`Stdout: ${stdout}`);
-      throw new Error(`Whisper a échoué avec le code ${result.status}. Vérifiez que Whisper.cpp est installé et que les chemins sont corrects. Erreur: ${stderr}`);
-    }
+    
+    // Utiliser spawn (asynchrone) au lieu de spawnSync pour éviter de bloquer
+    // Le modèle large-v3 peut prendre plusieurs minutes, donc on ne peut pas bloquer le thread
+    const result = await new Promise((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      
+      console.log('🚀 Démarrage de Whisper (peut prendre plusieurs minutes avec le modèle large-v3)...');
+      const whisperProcess = spawn(command, commandArgs, spawnOptions);
+      
+      // Timeout de 10 minutes pour le modèle large (peut être long)
+      const timeoutMs = 10 * 60 * 1000; // 10 minutes
+      const timeout = setTimeout(() => {
+        if (whisperProcess && !whisperProcess.killed) {
+          console.error('⏱️ Timeout: Whisper prend trop de temps, arrêt du processus...');
+          whisperProcess.kill('SIGTERM');
+          reject(new Error(`Timeout: Whisper a pris plus de ${timeoutMs / 1000 / 60} minutes. Le modèle large-v3 peut être très lent.`));
+        }
+      }, timeoutMs);
+      
+      // Capturer stdout
+      whisperProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        // Afficher la progression en temps réel
+        if (output.trim()) {
+          console.log('Whisper stdout:', output.trim());
+        }
+      });
+      
+      // Capturer stderr
+      whisperProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        // Afficher les erreurs/warnings en temps réel
+        if (output.trim()) {
+          console.log('Whisper stderr:', output.trim());
+        }
+      });
+      
+      // Gérer la fin du processus
+      whisperProcess.on('close', (code) => {
+        clearTimeout(timeout);
+        
+        if (code !== 0) {
+          console.error(`❌ Whisper a échoué avec le code ${code}`);
+          console.error(`Commande exécutée: ${command} ${commandArgs.join(' ')}`);
+          console.error(`Stderr: ${stderr}`);
+          console.error(`Stdout: ${stdout}`);
+          reject(new Error(`Whisper a échoué avec le code ${code}. Vérifiez que Whisper.cpp est installé et que les chemins sont corrects. Erreur: ${stderr || 'Aucun message d\'erreur'}`));
+          return;
+        }
+        
+        console.log('✅ Whisper terminé avec succès');
+        resolve({ stdout, stderr, code });
+      });
+      
+      // Gérer les erreurs de spawn
+      whisperProcess.on('error', (error) => {
+        clearTimeout(timeout);
+        console.error('❌ Erreur lors du lancement de Whisper:', error);
+        reject(new Error(`Erreur lors de l'exécution de Whisper: ${error.message}`));
+      });
+    });
 
     // Le fichier de sortie devrait être <audioPath>.txt
     // Whisper génère le fichier au même endroit que l'audio mais avec l'extension .txt
+    // Utiliser le chemin original pour le fichier .txt (pas le WAV temporaire)
     const txtPath = audioFilePath + '.txt';
-    const wslTxtPath = wslAudioPath + '.txt';
+    const wslTxtPath = convertWindowsToWSLPath(txtPath);
 
     // Essayer de lire le fichier .txt généré
     let transcriptionText = '';
@@ -286,8 +433,28 @@ async function transcribeLocalWhisper(audioFilePath) {
 
     console.log(`✅ Transcription locale réussie (${transcriptionText.length} caractères)`);
 
+    // Nettoyer le fichier WAV temporaire si on l'a créé
+    if (shouldCleanupWav && fs.existsSync(wavFilePath)) {
+      try {
+        fs.unlinkSync(wavFilePath);
+        console.log(`🗑️ Fichier WAV temporaire supprimé: ${wavFilePath}`);
+      } catch (cleanupError) {
+        console.warn(`⚠️ Impossible de supprimer le fichier WAV temporaire: ${cleanupError.message}`);
+      }
+    }
+
     return transcriptionText;
   } catch (error) {
+    // Nettoyer le fichier WAV temporaire même en cas d'erreur
+    if (shouldCleanupWav && wavFilePath && fs.existsSync(wavFilePath)) {
+      try {
+        fs.unlinkSync(wavFilePath);
+        console.log(`🗑️ Fichier WAV temporaire supprimé après erreur: ${wavFilePath}`);
+      } catch (cleanupError) {
+        console.warn(`⚠️ Impossible de supprimer le fichier WAV temporaire après erreur: ${cleanupError.message}`);
+      }
+    }
+    
     console.error('Erreur lors de la transcription locale:', error);
     throw new Error(`Erreur de transcription locale: ${error.message}`);
   }
