@@ -26,21 +26,12 @@ import PatientSelectionModal, { PatientSelectionResult } from '@/components/Pati
 import { notesApiService, Note } from '@/services/notesApi';
 import { patientsApiService } from '@/services/patientsApi';
 import { reportApiService, Report } from '@/services/reportApi';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
+import { Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
 import * as Haptics from 'expo-haptics';
-
-// Palette médicale premium
-const MEDICAL_COLORS = {
-  primary: '#0A84FF',
-  primaryLight: '#E8F1FF',
-  background: '#F5F6FA',
-  card: '#FFFFFF',
-  text: '#1B1B1D',
-  textSecondary: '#4A4A4A',
-  textMuted: '#8E8E93',
-  success: '#34C759',
-  error: '#FF3B30',
-};
+import NetworkErrorBanner from '@/components/NetworkErrorBanner';
+import ReportCard from '@/components/ReportCard';
+import { useTheme } from '@/contexts/ThemeContext';
+import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
 
 // Composant pour les cards de statistiques
 interface StatCardProps {
@@ -60,14 +51,27 @@ function StatCard({
   backgroundColor,
   onPress
 }: StatCardProps) {
+  const { theme } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      delay: 100,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const handlePressIn = () => {
     if (onPress) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Animated.spring(scaleAnim, {
-        toValue: 0.95,
+        toValue: 0.96,
         useNativeDriver: true,
+        tension: 300,
+        friction: 10,
       }).start();
     }
   };
@@ -76,21 +80,68 @@ function StatCard({
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
+      tension: 300,
+      friction: 10,
     }).start();
   };
+
+  const isLightMode = theme.resolved === 'light';
+  
+  // Gradient de couleur pour l'icône (plus subtil en dark mode)
+  const iconBgOpacity = isLightMode ? 1 : 0.2;
+  const iconBgColor = `${backgroundColor}${Math.round(iconBgOpacity * 255).toString(16).padStart(2, '0')}`;
 
   const content = (
     <Animated.View
       style={[
         styles.statCardContent,
-        { transform: [{ scale: scaleAnim }] },
+        { 
+          transform: [{ scale: scaleAnim }],
+          opacity: fadeAnim,
+          backgroundColor: theme.colors.backgroundCard,
+          borderColor: theme.colors.borderCard,
+        },
       ]}
     >
-      <View style={[styles.statIconContainer, { backgroundColor }]}>
-        <Ionicons name={icon} size={32} color={iconColor} />
+      {/* Icône avec fond coloré moderne */}
+      <View style={[
+        styles.statIconContainer, 
+        { 
+          backgroundColor: iconBgColor,
+        },
+      ]}>
+        <Ionicons 
+          name={icon} 
+          size={isLightMode ? 30 : 28} 
+          color={isLightMode ? iconColor : backgroundColor} 
+        />
       </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      
+      {/* Valeur avec typographie premium */}
+      <Text style={[
+        styles.statValue, 
+        { 
+          color: theme.colors.text,
+        },
+      ]}>
+        {value}
+      </Text>
+      
+      {/* Label avec espacement optimal */}
+      <Text style={[
+        styles.statLabel, 
+        { 
+          color: theme.colors.textSecondary,
+        },
+      ]}>
+        {label}
+      </Text>
+      
+      {/* Indicateur de couleur subtil en bas */}
+      <View style={[
+        styles.statIndicator,
+        { backgroundColor: backgroundColor },
+      ]} />
     </Animated.View>
   );
 
@@ -115,72 +166,7 @@ function StatCard({
   );
 }
 
-// Composant pour les cards de rapports récents
-interface RecentReportItemProps {
-  report: Report;
-  onPress?: () => void;
-}
-
-function RecentReportItem({ report, onPress }: RecentReportItemProps) {
-  const getRelativeDate = () => {
-    const now = new Date();
-    const reportDate = new Date(report.created_at || now);
-    const diffMs = now.getTime() - reportDate.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'À l\'instant';
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours} h`;
-    if (diffDays === 1) return 'Hier';
-    if (diffDays < 7) return `Il y a ${diffDays} jours`;
-    
-    return reportDate.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
-
-  const patientName = report.patient?.full_name || 'Patient inconnu';
-  const status = report.status || 'final';
-  const statusConfig = {
-    draft: { label: 'Brouillon', color: MEDICAL_COLORS.textMuted, bg: '#F5F5F7' },
-    final: { label: 'Finalisé', color: MEDICAL_COLORS.success, bg: '#E8F5E9' },
-    trash: { label: 'Corbeille', color: MEDICAL_COLORS.error, bg: '#FFEBEE' },
-  };
-  const currentStatus = statusConfig[status as keyof typeof statusConfig] || statusConfig.final;
-
-  return (
-    <TouchableOpacity
-      style={styles.medicalCard}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardIconContainer}>
-        <Ionicons name="document-text" size={24} color={MEDICAL_COLORS.primary} />
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {patientName}
-        </Text>
-        <Text style={styles.cardSubtitle} numberOfLines={2}>
-          Rapport SOAPIE
-        </Text>
-        <View style={styles.cardFooter}>
-          <View style={[styles.statusBadge, { backgroundColor: currentStatus.bg }]}>
-            <Text style={[styles.statusText, { color: currentStatus.color }]}>
-              {currentStatus.label}
-            </Text>
-          </View>
-          <Text style={styles.cardDate}>{getRelativeDate()}</Text>
-        </View>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={MEDICAL_COLORS.textMuted} />
-    </TouchableOpacity>
-  );
-}
+// Composant RecentReportItem supprimé - Utilisation de ReportCard à la place
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STAT_CARD_WIDTH = SCREEN_WIDTH * 0.65; // 65% de la largeur de l'écran
@@ -188,7 +174,19 @@ const STAT_CARD_WIDTH = SCREEN_WIDTH * 0.65; // 65% de la largeur de l'écran
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [showPatientModal, setShowPatientModal] = useState(false);
+  
+  // Animations d'écran : fade + slide-up
+  const screenOpacity = React.useRef(new Animated.Value(0)).current;
+  const screenTranslateY = React.useRef(new Animated.Value(20)).current;
+  
+  React.useEffect(() => {
+    Animated.parallel([
+      fadeIn(screenOpacity, ANIMATION_DURATION.SCREEN_TRANSITION),
+      slideUp(screenTranslateY, 20, ANIMATION_DURATION.SCREEN_TRANSITION),
+    ]).start();
+  }, []);
   const [recentReports, setRecentReports] = useState<Report[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
   const [totalPatients, setTotalPatients] = useState<number>(0);
@@ -197,12 +195,14 @@ export default function DashboardScreen() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'final' | 'trash'>('all');
   const [statsScrollIndex, setStatsScrollIndex] = useState(0);
   const statsScrollViewRef = React.useRef<FlatList>(null);
+  const [networkError, setNetworkError] = useState<string | null>(null);
 
   const firstName = user?.full_name?.split(' ')[0] || '';
 
   const loadRecentReports = async () => {
     try {
       setIsLoadingNotes(true);
+      setNetworkError(null);
       // Charger tous les rapports récents (tous statuts) et les trier par date
       const reportsResponse = await reportApiService.getReports({ limit: 50 });
       if (reportsResponse.ok && reportsResponse.reports) {
@@ -219,6 +219,11 @@ export default function DashboardScreen() {
     } catch (error: any) {
       console.error('Erreur lors du chargement des rapports récents:', error);
       setRecentReports([]);
+      
+      // Afficher un message d'erreur clair si c'est une erreur réseau
+      if (error.message && error.message.includes('Impossible de se connecter')) {
+        setNetworkError(error.message);
+      }
     } finally {
       setIsLoadingNotes(false);
     }
@@ -227,6 +232,7 @@ export default function DashboardScreen() {
   const loadStatistics = async () => {
     try {
       setIsLoadingStats(true);
+      setNetworkError(null);
       // Charger le nombre de patients
       const patients = await patientsApiService.getAllPatients();
       setTotalPatients(patients.length);
@@ -242,6 +248,12 @@ export default function DashboardScreen() {
     } catch (error: any) {
       console.error('Erreur lors du chargement des statistiques:', error);
       setTotalPatients(0);
+      
+      // Afficher un message d'erreur clair si c'est une erreur réseau
+      if (error.message && error.message.includes('Impossible de se connecter')) {
+        setNetworkError(error.message);
+        // Ne pas afficher d'alerte ici car elle sera déjà affichée par loadRecentReports
+      }
     } finally {
       setIsLoadingStats(false);
     }
@@ -303,7 +315,7 @@ export default function DashboardScreen() {
 
     if (report.id) {
       router.push({
-        pathname: '/report/details',
+        pathname: '/report/details' as any,
         params: { reportId: report.id },
       });
     }
@@ -341,33 +353,66 @@ export default function DashboardScreen() {
     router.push('/(tabs)/patients' as any);
   };
 
+  const handleRetryConnection = () => {
+    loadRecentReports();
+    loadStatistics();
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="auto" />
-      <ScrollView
+    <Animated.View 
+      style={[
+        { flex: 1 },
+        {
+          opacity: screenOpacity,
+          transform: [{ translateY: screenTranslateY }],
+        },
+      ]}
+    >
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+        <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+        
+        {/* Bannière d'erreur réseau élégante */}
+        <NetworkErrorBanner
+          message={networkError || ''}
+          visible={!!networkError}
+          onDismiss={() => setNetworkError(null)}
+          onRetry={handleRetryConnection}
+        />
+        
+        <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          networkError && { paddingTop: 200 }, // Espace pour la bannière d'erreur
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header premium avec avatar */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>
+            <Text style={[styles.greeting, { color: theme.colors.text }]}>
               {firstName ? `Bonjour, ${firstName}` : 'Bienvenue'}
             </Text>
-            <Text style={styles.subtitle}>Voici vos dernières activités</Text>
+            <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>Voici vos dernières activités</Text>
           </View>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person" size={28} color={MEDICAL_COLORS.primary} />
+          <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryLight }]}>
+            <Ionicons name="person" size={28} color={theme.colors.primary} />
           </View>
         </View>
 
-        {/* Section Statistiques - Carousel */}
+        {/* Section Statistiques - Carousel Premium */}
         <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Statistiques</Text>
+          <View style={styles.statsHeader}>
+            <View>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Statistiques</Text>
+              <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>
+                Vue d'ensemble de votre activité
+              </Text>
+            </View>
+          </View>
           {isLoadingStats ? (
             <View style={styles.statsLoadingContainer}>
-              <ActivityIndicator size="small" color={MEDICAL_COLORS.primary} />
+              <ActivityIndicator size="small" color={theme.colors.primary} />
             </View>
           ) : (
             <>
@@ -434,14 +479,18 @@ export default function DashboardScreen() {
                   setStatsScrollIndex(index);
                 }}
               />
-              {/* Indicateurs de pagination */}
+              {/* Indicateurs de pagination modernes */}
               <View style={styles.paginationDots}>
                 {[0, 1, 2, 3].map((index) => (
                   <View
                     key={index}
                     style={[
                       styles.paginationDot,
-                      index === statsScrollIndex && styles.paginationDotActive,
+                      { backgroundColor: theme.colors.border },
+                      index === statsScrollIndex && [
+                        styles.paginationDotActive,
+                        { backgroundColor: theme.colors.primary },
+                      ],
                     ]}
                   />
                 ))}
@@ -471,7 +520,10 @@ export default function DashboardScreen() {
                 key={status}
                 style={[
                   styles.filterChip,
-                  statusFilter === status && styles.filterChipActive,
+                  { 
+                    backgroundColor: statusFilter === status ? theme.colors.primary : theme.colors.backgroundCard,
+                    borderColor: statusFilter === status ? theme.colors.primary : theme.colors.border,
+                  },
                 ]}
                 onPress={() => setStatusFilter(status)}
                 activeOpacity={0.7}
@@ -479,7 +531,9 @@ export default function DashboardScreen() {
                 <Text
                   style={[
                     styles.filterChipText,
-                    statusFilter === status && styles.filterChipTextActive,
+                    { 
+                      color: statusFilter === status ? theme.colors.backgroundCard : theme.colors.textSecondary,
+                    },
                   ]}
                 >
                   {status === 'all'
@@ -496,28 +550,30 @@ export default function DashboardScreen() {
 
           {isLoadingNotes ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={MEDICAL_COLORS.primary} />
-              <Text style={styles.loadingText}>Chargement...</Text>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Chargement...</Text>
             </View>
           ) : filteredRecentReports.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Ionicons name="document-text-outline" size={64} color={MEDICAL_COLORS.textMuted} />
+              <View style={[styles.emptyIconContainer, { backgroundColor: theme.colors.backgroundCard }]}>
+                <Ionicons name="document-text-outline" size={64} color={theme.colors.textMuted} />
               </View>
-              <Text style={styles.emptyTitle}>
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
                 {statusFilter === 'all'
                   ? 'Aucun rapport récent'
                   : `Aucun rapport ${statusFilter === 'final' ? 'finalisé' : statusFilter === 'draft' ? 'en brouillon' : 'dans la corbeille'}`}
               </Text>
-              <Text style={styles.emptySubtext}>Créez votre première dictée</Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>Créez votre première dictée</Text>
             </View>
           ) : (
             <View style={styles.cardsList}>
-              {filteredRecentReports.map((report) => (
-                <RecentReportItem
+              {filteredRecentReports.map((report, index) => (
+                <ReportCard
                   key={report.id}
                   report={report}
                   onPress={() => handleReportPress(report)}
+                  index={index}
+                  showPatientName={true}
                 />
               ))}
             </View>
@@ -531,13 +587,13 @@ export default function DashboardScreen() {
         onSelect={handlePatientSelected}
       />
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MEDICAL_COLORS.background,
   },
   scrollView: {
     flex: 1,
@@ -560,21 +616,18 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 28,
     fontWeight: '600',
-    color: MEDICAL_COLORS.text,
     letterSpacing: -0.5,
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: MEDICAL_COLORS.textMuted,
     marginTop: Spacing.xs,
   },
   avatarContainer: {
     width: 56,
     height: 56,
     borderRadius: BorderRadius.full,
-    backgroundColor: MEDICAL_COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: Spacing.md,
@@ -597,26 +650,27 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '100%',
-    aspectRatio: 1.1, // Légèrement plus larges que hautes
+    aspectRatio: 1.15, // Format plus élégant
   },
   paginationDots: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing.md,
-    gap: Spacing.xs,
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
   paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: MEDICAL_COLORS.textMuted,
-    opacity: 0.3,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    // backgroundColor appliqué dynamiquement
   },
   paginationDotActive: {
-    backgroundColor: MEDICAL_COLORS.primary,
-    opacity: 1,
-    width: 24,
+    width: 20,
+    height: 6,
+    borderRadius: 3,
+    // backgroundColor appliqué dynamiquement
   },
   // Filtres
   filterContainer: {
@@ -629,55 +683,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
-    backgroundColor: MEDICAL_COLORS.card,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
   },
   filterChipActive: {
-    backgroundColor: MEDICAL_COLORS.primary,
-    borderColor: MEDICAL_COLORS.primary,
+    // Styles dynamiques appliqués dans le composant
   },
   filterChipText: {
     fontSize: 13,
     fontWeight: '500',
-    color: MEDICAL_COLORS.textSecondary,
   },
   filterChipTextActive: {
-    color: MEDICAL_COLORS.card,
     fontWeight: '600',
   },
   statCardContent: {
-    backgroundColor: MEDICAL_COLORS.card,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
+    padding: Spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
     height: '100%',
-    ...Shadows.sm,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    position: 'relative',
+    overflow: 'hidden',
+    // backgroundColor et borderColor appliqués dynamiquement
+  },
+  statCardContentLight: {
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
   statIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: BorderRadius.full,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
-    ...Shadows.md,
+    marginBottom: Spacing.lg,
+  },
+  statIconContainerLight: {
+    // Pas d'ombre, design épuré
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 40,
     fontWeight: '700',
-    color: MEDICAL_COLORS.text,
     marginBottom: Spacing.xs,
+    letterSpacing: -1,
+    lineHeight: 48,
+  },
+  statIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    borderBottomLeftRadius: BorderRadius.xl,
+    borderBottomRightRadius: BorderRadius.xl,
+  },
+  statsHeader: {
+    marginBottom: Spacing.lg,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginTop: Spacing.xs / 2,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
-    color: MEDICAL_COLORS.textSecondary,
     textAlign: 'center',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
   // Sections
   section: {
@@ -692,71 +766,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: MEDICAL_COLORS.text,
     letterSpacing: -0.3,
   },
   seeAllText: {
     fontSize: 16,
     fontWeight: '500',
-    color: MEDICAL_COLORS.primary,
   },
-  // Medical Cards
+  // Medical Cards - Design moderne et informatif
   cardsList: {
     gap: Spacing.md,
-  },
-  medicalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: MEDICAL_COLORS.card,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    ...Shadows.sm,
-    minHeight: 48, // Touch target
-  },
-  cardIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.md,
-    backgroundColor: MEDICAL_COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: MEDICAL_COLORS.text,
-    marginBottom: Spacing.xs,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: MEDICAL_COLORS.textSecondary,
-    marginBottom: Spacing.sm,
-    lineHeight: 20,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  statusBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardDate: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: MEDICAL_COLORS.textMuted,
   },
   // États
   loadingContainer: {
@@ -766,11 +784,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 15,
-    color: MEDICAL_COLORS.textMuted,
+    // color appliqué dynamiquement
     marginTop: Spacing.md,
   },
   emptyContainer: {
-    padding: Spacing.xxxl * 2,
+    padding: 64, // Spacing.xxxl * 2 (32 * 2)
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -778,22 +796,21 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: BorderRadius.full,
-    backgroundColor: MEDICAL_COLORS.card,
+    // backgroundColor appliqué dynamiquement
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.lg,
-    ...Shadows.sm,
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: MEDICAL_COLORS.textSecondary,
     marginTop: Spacing.md,
   },
   emptySubtext: {
     fontSize: 15,
     fontWeight: '400',
-    color: MEDICAL_COLORS.textMuted,
     marginTop: Spacing.xs,
   },
 });

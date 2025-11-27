@@ -9,6 +9,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const {
   getPatientById,
   createPatient,
+  updatePatient,
   getAllPatients,
   getNotesByPatient,
   searchPatients
@@ -293,6 +294,133 @@ router.post('/', authenticate, authorize(['nurse', 'admin']), async (req, res) =
     console.error('   Stack:', error.stack);
     res.status(500).json({ 
       error: 'Erreur lors de la création du patient', 
+      message: error.message || 'Une erreur inattendue est survenue'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/patients/{id}:
+ *   patch:
+ *     summary: Met à jour un patient existant
+ *     tags: [Patients]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID du patient
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               full_name:
+ *                 type: string
+ *                 description: Nom complet du patient
+ *               gender:
+ *                 type: string
+ *                 description: Genre du patient
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *                 description: Date de naissance
+ *               age:
+ *                 type: string
+ *                 description: Âge du patient
+ *               room_number:
+ *                 type: string
+ *                 description: Numéro de chambre
+ *               unit:
+ *                 type: string
+ *                 description: Unité/Service
+ *     responses:
+ *       200:
+ *         description: Patient mis à jour avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 patient:
+ *                   $ref: '#/components/schemas/Patient'
+ *       400:
+ *         description: Données invalides
+ *       401:
+ *         description: Non authentifié
+ *       403:
+ *         description: Accès refusé
+ *       404:
+ *         description: Patient non trouvé
+ *       500:
+ *         description: Erreur serveur
+ */
+router.patch('/:id', authenticate, authorize(['nurse', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, gender, dob, age, room_number, unit } = req.body;
+
+    // Vérifier que le patient existe
+    let existingPatient;
+    try {
+      existingPatient = await getPatientById(id);
+    } catch (error) {
+      return res.status(404).json({ error: 'Patient non trouvé' });
+    }
+
+    // Préparer les données de mise à jour (seulement les champs fournis)
+    const updateData = {};
+    if (full_name !== undefined) {
+      if (!full_name || full_name.trim().length === 0) {
+        return res.status(400).json({ error: 'Le nom du patient ne peut pas être vide' });
+      }
+      updateData.full_name = full_name.trim();
+    }
+    if (gender !== undefined) updateData.gender = gender || null;
+    if (dob !== undefined) updateData.dob = dob || null;
+    if (age !== undefined) updateData.age = age || null;
+    if (room_number !== undefined) updateData.room_number = room_number || null;
+    if (unit !== undefined) updateData.unit = unit || null;
+
+    // Si aucune donnée à mettre à jour
+    if (Object.keys(updateData).length === 0) {
+      return res.json({
+        ok: true,
+        patient: existingPatient
+      });
+    }
+
+    console.log('📝 Mise à jour du patient:', id);
+    console.log('📝 Données de mise à jour:', JSON.stringify(updateData, null, 2));
+
+    const updatedPatient = await updatePatient(id, updateData);
+
+    console.log('✅ Patient mis à jour avec succès:', updatedPatient.id);
+    res.json({
+      ok: true,
+      patient: updatedPatient
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de la mise à jour du patient:');
+    console.error('   Message:', error.message);
+    console.error('   Stack:', error.stack);
+    
+    if (error.message === 'Patient non trouvé') {
+      return res.status(404).json({ error: 'Patient non trouvé' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Erreur lors de la mise à jour du patient', 
       message: error.message || 'Une erreur inattendue est survenue'
     });
   }

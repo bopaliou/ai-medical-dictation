@@ -12,19 +12,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
 import FloatingActionButton from '@/components/FloatingActionButton';
-import { Colors, Shadows, BorderRadius } from '@/constants/design';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-// Couleurs premium pour la tab bar
-const TAB_BAR_COLORS = {
-  background: '#FFFFFF',
-  backgroundBlur: '#F8FAFC',
-  active: '#0A84FF',
-  inactive: '#9CA3AF',
-  textActive: '#0A84FF',
-  textInactive: '#6B7280',
-  border: '#E5E7EB',
-};
+import { Shadows, BorderRadius } from '@/constants/design';
+import { useTheme } from '@/contexts/ThemeContext';
+import { tabBarAnimate, ANIMATION_DURATION } from '@/utils/animations';
 
 // Composant d'icône animée pour la tab bar
 function AnimatedTabIcon({ 
@@ -36,30 +26,50 @@ function AnimatedTabIcon({
   focused: boolean; 
   size?: number;
 }) {
-  const scaleAnim = useRef(new Animated.Value(focused ? 1.1 : 1)).current;
+  const { theme } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(focused ? 1 : 0.9)).current;
+  const initialOpacity = theme.resolved === 'dark' ? 0.75 : 0.6; // Plus clair en dark mode
+  const opacityAnim = useRef(new Animated.Value(focused ? 1 : initialOpacity)).current;
 
   useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: focused ? 1.1 : 1,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 20,
-    }).start();
+    if (focused) {
+      // Animation premium : scale 0.9 → 1.1 → 1 avec fade
+      tabBarAnimate(scaleAnim, opacityAnim, ANIMATION_DURATION.TAB_BAR).start();
+    } else {
+      // Animation de désactivation douce
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0.9,
+          duration: ANIMATION_DURATION.TAB_BAR,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: theme.resolved === 'dark' ? 0.75 : 0.6, // Plus clair en dark mode
+          duration: ANIMATION_DURATION.TAB_BAR,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   }, [focused]);
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View 
+      style={{ 
+        transform: [{ scale: scaleAnim }],
+        opacity: opacityAnim,
+      }}
+    >
       <Ionicons 
         name={name} 
         size={size} 
-        color={focused ? TAB_BAR_COLORS.active : TAB_BAR_COLORS.inactive} 
+        color={focused ? theme.colors.tabIconSelected : theme.colors.tabIconDefault} 
       />
     </Animated.View>
   );
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
   // Calculer le padding bottom en tenant compte uniquement de la safe area
@@ -91,8 +101,8 @@ export default function TabLayout() {
     <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: TAB_BAR_COLORS.textActive,
-          tabBarInactiveTintColor: TAB_BAR_COLORS.textInactive,
+          tabBarActiveTintColor: theme.colors.tabIconSelected,
+          tabBarInactiveTintColor: theme.colors.tabIconDefault,
           headerShown: false,
           tabBarButton: HapticTab,
           tabBarStyle: {
@@ -100,17 +110,17 @@ export default function TabLayout() {
             bottom: 0,
             left: 0,
             right: 0,
-            backgroundColor: TAB_BAR_COLORS.background,
-            borderTopWidth: 0.5,
-            borderTopColor: TAB_BAR_COLORS.border,
+            backgroundColor: theme.colors.tabBarBackground,
+            borderTopWidth: theme.resolved === 'dark' ? 1 : 0.5, // Bordure plus épaisse en dark mode
+            borderTopColor: theme.resolved === 'dark' ? '#3A3A3D' : theme.colors.tabBarBorder, // Plus claire en dark mode
             height: getTabBarHeight(),
             paddingTop: 8,
             paddingBottom: getPaddingBottom(),
             paddingHorizontal: 8,
             elevation: 0,
-            shadowColor: '#000',
+            shadowColor: theme.resolved === 'dark' ? '#000' : '#000',
             shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.08,
+            shadowOpacity: theme.resolved === 'dark' ? 0.3 : 0.08,
             shadowRadius: 12,
             borderTopLeftRadius: 14,
             borderTopRightRadius: 14,
@@ -120,6 +130,9 @@ export default function TabLayout() {
             fontWeight: '600',
             marginTop: 2,
             letterSpacing: 0.2,
+            color: theme.resolved === 'dark' 
+              ? 'rgba(255, 255, 255, 0.7)' // Plus clair en dark mode
+              : theme.colors.tabIconDefault,
           },
           tabBarItemStyle: {
             paddingVertical: 4,

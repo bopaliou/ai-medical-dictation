@@ -369,6 +369,7 @@ async function getReportsByUser(userId, options = {}) {
       created_at: report.created_at,
       recorded_at: report.recorded_at,
       status: report.status || 'final', // Valeur par défaut
+      structured_json: report.structured_json || null, // Inclure structured_json pour les données médicales
       patient: report.patients ? {
         id: report.patients.id,
         full_name: report.patients.full_name,
@@ -506,6 +507,123 @@ async function createPatient(patientData) {
     return data;
   } catch (error) {
     console.error('❌ Erreur createPatient:', error);
+    throw error;
+  }
+}
+
+/**
+ * Met à jour un patient existant
+ * @param {string} patientId - ID du patient
+ * @param {Object} patientData - Données à mettre à jour
+ * @returns {Promise<Object>}
+ */
+async function updatePatient(patientId, patientData) {
+  try {
+    // Colonnes de base qui existent toujours dans le schéma
+    const baseFields = ['full_name', 'gender', 'dob'];
+    // Colonnes optionnelles qui peuvent ne pas exister si la migration n'a pas été exécutée
+    const optionalFields = ['age', 'room_number', 'unit'];
+    
+    // Filtrer les données pour ne garder que celles qui sont définies
+    let filteredData = {};
+    
+    // Ajouter les champs de base
+    for (const field of baseFields) {
+      if (patientData[field] !== undefined && patientData[field] !== null && patientData[field] !== '') {
+        filteredData[field] = patientData[field];
+      }
+    }
+    
+    // Ajouter les champs optionnels
+    for (const field of optionalFields) {
+      if (patientData[field] !== undefined && patientData[field] !== null && patientData[field] !== '') {
+        filteredData[field] = patientData[field];
+      }
+    }
+    
+    // Si aucun champ à mettre à jour, retourner le patient existant
+    if (Object.keys(filteredData).length === 0) {
+      console.log('⚠️ Aucune donnée à mettre à jour');
+      return await getPatientById(patientId);
+    }
+    
+    console.log('📝 Mise à jour du patient:', patientId);
+    console.log('📝 Données filtrées pour mise à jour:', JSON.stringify(filteredData, null, 2));
+    console.log('🔑 Utilisation du service role key (RLS bypassé)');
+    
+    let { data, error } = await supabase
+      .from('patients')
+      .update(filteredData)
+      .eq('id', patientId)
+      .select()
+      .single();
+    
+    console.log('📡 Réponse Supabase - Error:', error ? JSON.stringify(error, null, 2) : 'null');
+    console.log('📡 Réponse Supabase - Data:', data ? 'Patient mis à jour' : 'null');
+
+    // Si erreur liée à une colonne manquante, réessayer avec seulement les colonnes de base
+    if (error && (error.message?.includes('column') || error.message?.includes('does not exist') || error.code === '42703')) {
+      console.warn('⚠️ Colonnes optionnelles non disponibles, réessai avec colonnes de base uniquement');
+      
+      // Réessayer avec seulement les colonnes de base
+      filteredData = {};
+      for (const field of baseFields) {
+        if (patientData[field] !== undefined && patientData[field] !== null && patientData[field] !== '') {
+          filteredData[field] = patientData[field];
+        }
+      }
+      
+      console.log('📝 Réessai avec données de base uniquement:', JSON.stringify(filteredData, null, 2));
+      
+      const retryResult = await supabase
+        .from('patients')
+        .update(filteredData)
+        .eq('id', patientId)
+        .select()
+        .single();
+      
+      if (retryResult.error) {
+        error = retryResult.error;
+      } else {
+        data = retryResult.data;
+        error = null;
+        console.log('✅ Patient mis à jour avec colonnes de base uniquement (migration non exécutée)');
+      }
+    }
+
+    if (error) {
+      console.error('❌ Erreur Supabase lors de la mise à jour du patient:');
+      console.error('   Code:', error.code);
+      console.error('   Message:', error.message);
+      console.error('   Details:', error.details);
+      console.error('   Hint:', error.hint);
+      
+      // Si l'erreur indique qu'une colonne n'existe pas, suggérer d'exécuter la migration
+      if (error.message && (error.message.includes('column') || error.message.includes('does not exist') || error.code === '42703')) {
+        throw new Error(`Colonne manquante dans la base de données. Veuillez exécuter la migration: backend/migrations/add_patient_fields.sql. Erreur: ${error.message}`);
+      }
+      
+      // Si erreur RLS (permission denied)
+      if (error.code === '42501' || error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+        throw new Error(`Erreur de permissions (RLS). Le service role key devrait bypasser RLS. Vérifiez SUPABASE_SERVICE_ROLE_KEY. Erreur: ${error.message}`);
+      }
+      
+      // Si patient non trouvé
+      if (error.code === 'PGRST116') {
+        throw new Error('Patient non trouvé');
+      }
+      
+      throw new Error(`Erreur lors de la mise à jour du patient: ${error.message || 'Erreur inconnue'}`);
+    }
+
+    if (!data) {
+      throw new Error('Patient non trouvé');
+    }
+
+    console.log('✅ Patient mis à jour avec succès:', data.id);
+    return data;
+  } catch (error) {
+    console.error('❌ Erreur updatePatient:', error);
     throw error;
   }
 }
@@ -1083,6 +1201,7 @@ module.exports = {
   createSignedUrlForPDF,
   getPatientById,
   createPatient,
+  updatePatient,
   getAllPatients,
   searchPatients,
   deleteTemporaryFile,

@@ -60,6 +60,7 @@ export interface Report {
   created_at: string;
   recorded_at?: string;
   status: 'draft' | 'final' | 'trash';
+  structured_json?: StructuredJson | null; // Données SOAPIE structurées
   patient: {
     id: string;
     full_name: string;
@@ -250,6 +251,17 @@ class ReportApiService {
 
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string; message?: string }>;
+        
+        // Erreur réseau (backend inaccessible)
+        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          const errorMessage = `Impossible de se connecter au serveur.\n\n` +
+            `Vérifiez que :\n` +
+            `• Le backend est démarré (port 3000)\n` +
+            `• Votre appareil est sur le même réseau WiFi\n` +
+            `• L'IP dans app.json correspond à votre ordinateur\n` +
+            `\nURL configurée : ${this.baseURL}`;
+          throw new Error(errorMessage);
+        }
         
         if (axiosError.response?.status === 404) {
           throw new Error('Endpoint des rapports non trouvé. Vérifiez la configuration du backend.');

@@ -22,6 +22,7 @@ import { useTimer } from '@/hooks/useTimer';
 import { useWaveform } from '@/hooks/useWaveform';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { CreatePatientData } from '@/services/patientsApi';
+import ModernHeader from '@/components/ModernHeader';
 
 const { width } = Dimensions.get('window');
 
@@ -181,30 +182,17 @@ export default function RecordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={styles.container}>
       <StatusBar style="auto" />
       
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        {/* Header Premium */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={handleCancel}
-          >
-            <Ionicons name="close" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Enregistrement</Text>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={() => {
-              // Placeholder - non fonctionnel pour l'instant
-            }}
-          >
-            <Ionicons name="settings-outline" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-        </View>
+        {/* Header moderne */}
+        <ModernHeader
+          title="Enregistrement"
+          subtitle="Dictée vocale médicale"
+          icon="mic"
+          onBackPress={handleCancel}
+        />
 
         {/* Zone principale centrée */}
         <View style={styles.mainArea}>
@@ -247,7 +235,7 @@ export default function RecordScreen() {
           </View>
         </View>
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 

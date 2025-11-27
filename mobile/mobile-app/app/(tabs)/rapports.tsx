@@ -15,39 +15,159 @@ import {
   Alert,
   RefreshControl,
   Animated,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { reportApiService, Report } from '@/services/reportApi';
+import ReportCard from '@/components/ReportCard';
+import * as Haptics from 'expo-haptics';
+import { useTheme } from '@/contexts/ThemeContext';
+import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
 
 type FilterType = 'all' | 'final' | 'draft' | 'trash';
 
-// Couleurs médicales premium
-const MEDICAL_COLORS = {
-  primary: '#0A84FF',
-  background: '#F5F6FA',
-  card: '#FFFFFF',
-  text: '#1B1B1D',
-  textSecondary: '#4A4A4A',
-  textMuted: '#8E8E93',
-  border: '#E5E5EA',
-  success: '#34C759',
-  warning: '#FF9500',
-  error: '#FF3B30',
-};
+// Composant FilterChip avec animations et couleurs par statut
+function FilterChip({ label, filterKey, isActive, onPress, index }: { label: string; filterKey: FilterType; isActive: boolean; onPress: () => void; index: number }) {
+  const { theme } = useTheme();
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const opacityAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(opacityAnim, {
+      toValue: 1,
+      duration: 300,
+      delay: index * 50,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Couleurs selon le statut - appliquées en arrière-plan
+  const getFilterColors = (key: FilterType) => {
+    switch (key) {
+      case 'final':
+        return {
+          activeBg: theme.colors.success,
+          activeBorder: theme.colors.success,
+          activeText: '#FFFFFF',
+          inactiveBg: theme.colors.successLight,
+          inactiveBorder: theme.colors.success + '60',
+          inactiveText: theme.colors.success,
+        };
+      case 'draft':
+        return {
+          activeBg: theme.colors.warning,
+          activeBorder: theme.colors.warning,
+          activeText: '#FFFFFF',
+          inactiveBg: theme.colors.warningLight,
+          inactiveBorder: theme.colors.warning + '60',
+          inactiveText: theme.colors.warning,
+        };
+      case 'trash':
+        return {
+          activeBg: theme.colors.error,
+          activeBorder: theme.colors.error,
+          activeText: '#FFFFFF',
+          inactiveBg: theme.colors.errorLight,
+          inactiveBorder: theme.colors.error + '60',
+          inactiveText: theme.colors.error,
+        };
+      default: // 'all'
+        return {
+          activeBg: theme.colors.primary,
+          activeBorder: theme.colors.primary,
+          activeText: '#FFFFFF',
+          inactiveBg: theme.colors.primaryLight,
+          inactiveBorder: theme.colors.primary + '60',
+          inactiveText: theme.colors.primary,
+        };
+    }
+  };
+
+  const colors = getFilterColors(filterKey);
+
+  return (
+    <Animated.View style={{ opacity: opacityAnim }}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        <Animated.View
+          style={[
+            styles.filterChip,
+            isActive
+              ? {
+                  backgroundColor: colors.activeBg,
+                  borderColor: colors.activeBorder,
+                }
+              : {
+                  backgroundColor: colors.inactiveBg,
+                  borderColor: colors.inactiveBorder,
+                },
+            { transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          {isActive && (
+            <View style={[styles.filterChipActiveIndicator, { backgroundColor: colors.activeText }]} />
+          )}
+          <Text
+            style={[
+              styles.filterText,
+              isActive
+                ? { color: colors.activeText }
+                : { color: colors.inactiveText },
+            ]}
+          >
+            {label}
+          </Text>
+        </Animated.View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function RapportsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   const [reports, setReports] = useState<Report[]>([]);
   const [filteredReports, setFilteredReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Animations d'écran : fade + slide-up
+  const screenOpacity = React.useRef(new Animated.Value(0)).current;
+  const screenTranslateY = React.useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      fadeIn(screenOpacity, ANIMATION_DURATION.SCREEN_TRANSITION),
+      slideUp(screenTranslateY, 20, ANIMATION_DURATION.SCREEN_TRANSITION),
+    ]).start();
+  }, []);
 
   const loadReports = useCallback(async (status?: string) => {
     try {
@@ -97,78 +217,58 @@ export default function RapportsScreen() {
     loadReports(activeFilter === 'all' ? undefined : activeFilter);
   }, [loadReports, activeFilter]);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffDays === 0) {
-      return `Aujourd'hui à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (diffDays === 1) {
-      return `Hier à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (diffDays < 7) {
-      return `Il y a ${diffDays} jours`;
-    } else {
-      return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    }
-  };
 
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'final':
         return { 
-          color: MEDICAL_COLORS.success, 
-          bgColor: '#E8F5E9',
+          color: theme.colors.success, 
+          bgColor: theme.colors.successLight,
           label: 'Finalisé', 
           icon: 'checkmark-circle' as const 
         };
       case 'draft':
         return { 
-          color: MEDICAL_COLORS.warning, 
-          bgColor: '#FFF3E0',
+          color: theme.colors.warning, 
+          bgColor: theme.colors.warningLight,
           label: 'Brouillon', 
           icon: 'document-text' as const 
         };
       case 'trash':
         return { 
-          color: MEDICAL_COLORS.error, 
-          bgColor: '#FFEBEE',
+          color: theme.colors.error, 
+          bgColor: theme.colors.errorLight,
           label: 'Corbeille', 
           icon: 'trash' as const 
         };
       default:
         return { 
-          color: MEDICAL_COLORS.textMuted, 
-          bgColor: '#F5F5F7',
+          color: theme.colors.textMuted, 
+          bgColor: theme.colors.backgroundSecondary,
           label: status, 
           icon: 'ellipse' as const 
         };
     }
   };
 
-  const getReportSummary = (report: Report): string => {
-    if (report.soapie?.S) {
-      const s = String(report.soapie.S);
-      return s.length > 80 ? s.substring(0, 80) + '...' : s;
-    }
-    if (report.soapie?.A) {
-      const a = String(report.soapie.A);
-      return a.length > 80 ? a.substring(0, 80) + '...' : a;
-    }
-    return 'Note médicale SOAPIE';
-  };
 
-  const handleOpenPDF = (reportId?: string) => {
-    if (reportId) {
+  const handleReportPress = (report: Report) => {
+    if (!report.pdf_url) {
+      Alert.alert(
+        'Rapport non disponible',
+        'Ce rapport n\'a pas encore été généré. Veuillez générer le PDF depuis l\'écran d\'édition.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (report.id) {
       router.push({
-        pathname: '/report/details',
-        params: { reportId },
+        pathname: '/report/details' as any,
+        params: { reportId: report.id },
       });
+    } else {
+      Alert.alert('Erreur', 'ID du rapport manquant');
     }
   };
 
@@ -270,82 +370,110 @@ export default function RapportsScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="auto" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
 
-      {/* Header moderne avec titre et sous-titre */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Rapports</Text>
-          <Text style={styles.subtitle}>Historique des notes et dictées</Text>
-        </View>
-      </View>
-
-      {/* Barre de recherche élégante */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color={MEDICAL_COLORS.textMuted} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher par patient ou date..."
-          placeholderTextColor={MEDICAL_COLORS.textMuted}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-        />
-        {searchTerm.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchTerm('')} style={styles.clearButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close-circle" size={20} color={MEDICAL_COLORS.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Chips de filtres élégants */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-        contentContainerStyle={styles.filtersContent}
+      {/* Header moderne avec gradient - Edge-to-edge */}
+      <LinearGradient
+        colors={theme.resolved === 'dark' 
+          ? [theme.colors.backgroundElevated, theme.colors.backgroundCard]
+          : ['#FFFFFF', '#F8FAFC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[styles.headerGradient, { borderBottomColor: theme.colors.border }]}
       >
-        {filters.map((filter) => (
-          <TouchableOpacity
-            key={filter.key}
-            style={[
-              styles.filterChip,
-              activeFilter === filter.key && styles.filterChipActive,
-            ]}
-            onPress={() => setActiveFilter(filter.key)}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                activeFilter === filter.key && styles.filterTextActive,
-              ]}
-            >
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={[styles.title, { color: theme.colors.text }]}>Rapports</Text>
+              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Historique des notes et dictées</Text>
+            </View>
+            <View style={styles.headerStats}>
+              <Text style={[styles.statsText, { color: theme.colors.textSecondary }]}>{filteredReports.length} rapport{filteredReports.length > 1 ? 's' : ''}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Barre de recherche premium avec glassmorphism */}
+        <View style={styles.searchWrapper}>
+          <View style={[styles.searchContainer, { 
+            backgroundColor: theme.colors.backgroundCard,
+            borderColor: theme.colors.borderCard,
+          }]}>
+            <View style={[styles.searchIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+              <Ionicons name="search" size={20} color={theme.colors.primary} />
+            </View>
+            <TextInput
+              style={[styles.searchInput, { color: theme.colors.text }]}
+              placeholder="Rechercher par patient ou date..."
+              placeholderTextColor={theme.colors.textMuted}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              returnKeyType="search"
+              clearButtonMode="never"
+            />
+            {searchTerm.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSearchTerm('');
+                }}
+                style={styles.clearButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <View style={[styles.clearButtonInner, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                  <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Chips de filtres premium avec animations */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersContainer}
+          contentContainerStyle={styles.filtersContent}
+        >
+          {filters.map((filter, index) => {
+            const isActive = activeFilter === filter.key;
+            return (
+              <FilterChip
+                key={filter.key}
+                label={filter.label}
+                filterKey={filter.key}
+                isActive={isActive}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveFilter(filter.key);
+                }}
+                index={index}
+              />
+            );
+          })}
+        </ScrollView>
+      </LinearGradient>
 
       {/* Liste des rapports */}
       {isLoading && !isRefreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={MEDICAL_COLORS.primary} />
-          <Text style={styles.loadingText}>Chargement...</Text>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Chargement...</Text>
         </View>
       ) : filteredReports.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconContainer}>
-            <Ionicons name="document-text-outline" size={64} color={MEDICAL_COLORS.textMuted} />
+          <View style={[styles.emptyIconContainer, { backgroundColor: theme.colors.backgroundCard }]}>
+            <Ionicons name="document-text-outline" size={64} color={theme.colors.textMuted} />
           </View>
-          <Text style={styles.emptyTitle}>
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
             {searchTerm
               ? 'Aucun résultat'
               : activeFilter === 'all'
               ? 'Aucun rapport'
               : `Aucun rapport ${filters.find(f => f.key === activeFilter)?.label.toLowerCase()}`}
           </Text>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
             {searchTerm
               ? 'Essayez avec d\'autres mots-clés'
               : 'Vos rapports générés apparaîtront ici'}
@@ -356,230 +484,160 @@ export default function RapportsScreen() {
           style={styles.listContainer}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MEDICAL_COLORS.primary} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
           }
         >
-          {filteredReports.map((report, index) => {
-            const statusConfig = getStatusConfig(report.status);
-            return (
-              <ReportCard
-                key={report.id}
-                report={report}
-                statusConfig={statusConfig}
-                formatDate={formatDate}
-                getReportSummary={getReportSummary}
-                onPress={() => handleOpenPDF(report.id)}
-                onShare={() => handleSharePDF(report.pdf_url!)}
-                onMenu={() => showActionMenu(report)}
-                index={index}
-              />
-            );
-          })}
+          {filteredReports.map((report, index) => (
+            <ReportCard
+              key={report.id}
+              report={report}
+              onPress={() => handleReportPress(report)}
+              onShare={report.pdf_url ? () => handleSharePDF(report.pdf_url!) : undefined}
+              onMenu={() => showActionMenu(report)}
+              index={index}
+              showPatientName={true}
+            />
+          ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
-// Composant ReportCard avec animations
-interface ReportCardProps {
-  report: Report;
-  statusConfig: { color: string; bgColor: string; label: string; icon: keyof typeof Ionicons.glyphMap };
-  formatDate: (date: string) => string;
-  getReportSummary: (report: Report) => string;
-  onPress: () => void;
-  onShare: () => void;
-  onMenu: () => void;
-  index: number;
-}
-
-function ReportCard({ report, statusConfig, formatDate, getReportSummary, onPress, onShare, onMenu, index }: ReportCardProps) {
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-  const opacityAnim = React.useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.timing(opacityAnim, {
-      toValue: 1,
-      duration: 300,
-      delay: index * 50,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <Animated.View
-      style={[
-        styles.cardWrapper,
-        {
-          opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
-      <TouchableOpacity
-        style={styles.reportCard}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-      >
-        {/* Icône principale */}
-        <View style={styles.cardIconContainer}>
-          <Ionicons name="document-text" size={32} color={MEDICAL_COLORS.primary} />
-        </View>
-
-        {/* Contenu principal */}
-        <View style={styles.cardContent}>
-          {/* Header avec nom patient et badge */}
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardPatientName} numberOfLines={1}>
-              {report.patient?.full_name || 'Patient inconnu'}
-            </Text>
-            <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
-              <Ionicons name={statusConfig.icon} size={12} color={statusConfig.color} />
-              <Text style={[styles.statusText, { color: statusConfig.color }]}>
-                {statusConfig.label}
-              </Text>
-            </View>
-          </View>
-
-          {/* Résumé en 1-2 lignes */}
-          <Text style={styles.cardSummary} numberOfLines={2}>
-            {getReportSummary(report)}
-          </Text>
-
-          {/* Date et heure */}
-          <View style={styles.cardDateContainer}>
-            <Ionicons name="time-outline" size={14} color={MEDICAL_COLORS.textMuted} />
-            <Text style={styles.cardDate}>{formatDate(report.created_at)}</Text>
-          </View>
-        </View>
-
-        {/* Actions rapides */}
-        <View style={styles.cardActions}>
-          {report.pdf_url && (
-            <>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onShare();
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="share-outline" size={22} color={MEDICAL_COLORS.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onMenu();
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={22} color={MEDICAL_COLORS.textMuted} />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MEDICAL_COLORS.background,
+  },
+  headerGradient: {
+    borderBottomWidth: 1,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+      },
+      android: {
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+      },
+    }),
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-    backgroundColor: MEDICAL_COLORS.card,
-    borderBottomWidth: 1,
-    borderBottomColor: MEDICAL_COLORS.border,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   title: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '700',
-    color: MEDICAL_COLORS.text,
-    letterSpacing: -0.5,
-    marginBottom: 4,
+    letterSpacing: -0.8,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 15,
-    color: MEDICAL_COLORS.textSecondary,
     fontWeight: '400',
+    letterSpacing: -0.2,
+  },
+  headerStats: {
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    // backgroundColor et borderColor appliqués dynamiquement
+  },
+  statsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  searchWrapper: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: MEDICAL_COLORS.card,
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 16,
+    borderWidth: 1.5,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
+    // backgroundColor et borderColor appliqués dynamiquement
   },
-  searchIcon: {
+  searchIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+    // backgroundColor appliqué dynamiquement
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: MEDICAL_COLORS.text,
+    fontSize: 16,
     padding: 0,
+    fontWeight: '400',
+    letterSpacing: -0.2,
+    // color appliqué dynamiquement
   },
   clearButton: {
     marginLeft: 8,
-    padding: 4,
+  },
+  clearButtonInner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // backgroundColor appliqué dynamiquement
   },
   filtersContainer: {
-    maxHeight: 50,
-    marginBottom: 16,
+    maxHeight: 56,
+    paddingBottom: 16,
   },
   filtersContent: {
     paddingHorizontal: 20,
     gap: 10,
+    paddingRight: 20,
   },
   filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: MEDICAL_COLORS.card,
+    paddingVertical: 11,
+    borderRadius: 22,
+    borderWidth: 1.5,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 44,
   },
-  filterChipActive: {
-    backgroundColor: MEDICAL_COLORS.primary,
-    borderColor: MEDICAL_COLORS.primary,
+  filterChipActiveIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    borderRadius: 2,
   },
   filterText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: MEDICAL_COLORS.textSecondary,
-  },
-  filterTextActive: {
-    color: MEDICAL_COLORS.card,
     fontWeight: '600',
+    letterSpacing: -0.1,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -589,7 +647,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 15,
-    color: MEDICAL_COLORS.textMuted,
   },
   emptyContainer: {
     flex: 1,
@@ -601,7 +658,6 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: MEDICAL_COLORS.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -609,13 +665,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: MEDICAL_COLORS.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
     fontSize: 15,
-    color: MEDICAL_COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -631,22 +685,15 @@ const styles = StyleSheet.create({
   },
   reportCard: {
     flexDirection: 'row',
-    backgroundColor: MEDICAL_COLORS.card,
     borderRadius: 18,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   cardIconContainer: {
     width: 56,
     height: 56,
     borderRadius: 14,
-    backgroundColor: '#E8F1FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -665,7 +712,6 @@ const styles = StyleSheet.create({
   cardPatientName: {
     fontSize: 17,
     fontWeight: '600',
-    color: MEDICAL_COLORS.text,
     flex: 1,
   },
   statusBadge: {
@@ -683,7 +729,6 @@ const styles = StyleSheet.create({
   },
   cardSummary: {
     fontSize: 14,
-    color: MEDICAL_COLORS.textSecondary,
     lineHeight: 20,
     marginBottom: 10,
   },
@@ -694,7 +739,6 @@ const styles = StyleSheet.create({
   },
   cardDate: {
     fontSize: 13,
-    color: MEDICAL_COLORS.textMuted,
     fontWeight: '400',
   },
   cardActions: {
@@ -709,6 +753,5 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
   },
 });

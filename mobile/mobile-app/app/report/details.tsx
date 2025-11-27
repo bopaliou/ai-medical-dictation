@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Platform,
   RefreshControl,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +25,10 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system/legacy';
 import { reportApiService, ReportDetails } from '@/services/reportApi';
+import * as Haptics from 'expo-haptics';
+import ModernHeader from '@/components/ModernHeader';
+import { useTheme } from '@/contexts/ThemeContext';
+import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
 
 // Interface pour les détails du rapport
 interface ReportDetails {
@@ -68,12 +73,26 @@ export default function ReportDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const reportId = params.reportId as string;
+  const { theme } = useTheme();
 
   // États
   const [report, setReport] = useState<ReportDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  
+  // Animations d'écran : fade + slide-up
+  const screenOpacity = React.useRef(new Animated.Value(0)).current;
+  const screenTranslateY = React.useRef(new Animated.Value(20)).current;
+  
+  React.useEffect(() => {
+    if (!isLoading && report) {
+      Animated.parallel([
+        fadeIn(screenOpacity, ANIMATION_DURATION.SCREEN_TRANSITION),
+        slideUp(screenTranslateY, 20, ANIMATION_DURATION.SCREEN_TRANSITION),
+      ]).start();
+    }
+  }, [isLoading, report]);
 
   /**
    * Récupère les détails du rapport depuis l'API
@@ -159,14 +178,44 @@ export default function ReportDetailsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'final':
-        return '#007AFF';
+        return theme.colors.success; // Vert pour finalisé (cohérent partout)
       case 'draft':
-        return '#FFD60A';
+        return theme.colors.warning;
       case 'trash':
-        return '#FF3B30';
+        return theme.colors.error;
       default:
-        return '#8E8E93';
+        return theme.colors.textMuted;
     }
+  };
+
+  /**
+   * Obtient la configuration des couleurs SOAPIE selon le thème
+   */
+  const getSoapieConfig = (sectionKey: string) => {
+    const configs: Record<string, { color: string; bg: string; icon: string }> = {
+      S: { color: '#5AC8FA', bg: theme.resolved === 'dark' ? '#1A3A5C' : '#E8F1FF', icon: 'chatbubble-ellipses' },
+      O: { color: theme.colors.success, bg: theme.colors.successLight, icon: 'eye' },
+      A: { color: theme.colors.warning, bg: theme.colors.warningLight, icon: 'analytics' },
+      I: { color: '#AF52DE', bg: theme.resolved === 'dark' ? '#2A1A3A' : '#F3E8FF', icon: 'medical' },
+      E: { color: theme.colors.primary, bg: theme.colors.primaryLight, icon: 'checkmark-circle' },
+      P: { color: '#FF2D55', bg: theme.resolved === 'dark' ? '#3A1A22' : '#FFEBF0', icon: 'clipboard' },
+    };
+    return configs[sectionKey] || { color: theme.colors.primary, bg: theme.colors.primaryLight, icon: 'document' };
+  };
+
+  /**
+   * Obtient la configuration des couleurs pour les signes vitaux
+   */
+  const getVitalConfig = (vitalKey: string) => {
+    const configs: Record<string, { color: string; bg: string }> = {
+      temperature: { color: theme.colors.warning, bg: theme.colors.warningLight },
+      blood_pressure: { color: theme.colors.error, bg: theme.colors.errorLight },
+      heart_rate: { color: theme.colors.error, bg: theme.colors.errorLight },
+      respiratory_rate: { color: '#5AC8FA', bg: theme.resolved === 'dark' ? '#1A3A5C' : '#E8F1FF' },
+      spo2: { color: theme.colors.primary, bg: theme.colors.primaryLight },
+      glycemia: { color: theme.colors.warning, bg: theme.colors.warningLight },
+    };
+    return configs[vitalKey] || { color: theme.colors.primary, bg: theme.colors.primaryLight };
   };
 
   /**
@@ -196,6 +245,7 @@ export default function ReportDetailsScreen() {
 
     try {
       setIsActionLoading(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       console.log('📄 Ouverture du PDF:', report.pdf_url);
       
       // Ouvrir dans le viewer intégré
@@ -285,55 +335,105 @@ export default function ReportDetailsScreen() {
       setIsActionLoading(true);
       console.log('🖨️ Impression du PDF:', report.pdf_url);
 
-      const isAvailable = await Print.isAvailableAsync();
-      if (!isAvailable) {
-        Alert.alert('Information', 'L\'impression n\'est pas disponible sur cet appareil');
-        return;
+      // Vérifier la disponibilité de l'impression (peut ne pas être disponible sur toutes les plateformes/versions)
+      try {
+        if (typeof Print.isAvailableAsync === 'function') {
+          const isAvailable = await Print.isAvailableAsync();
+          if (!isAvailable) {
+            Alert.alert('Information', 'L\'impression n\'est pas disponible sur cet appareil');
+            return;
+          }
+        } else {
+          console.log('⚠️ Print.isAvailableAsync n\'est pas disponible, continuation de l\'impression...');
+        }
+      } catch (checkError) {
+        console.log('⚠️ Erreur lors de la vérification de disponibilité, continuation...', checkError);
+        // Continuer quand même, certaines plateformes peuvent ne pas avoir cette méthode
       }
 
-      // Télécharger le PDF temporairement pour l'impression
-      const fileName = `rapport-print-${Date.now()}.pdf`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      
-      console.log('📥 Téléchargement du PDF pour impression...');
-      console.log('   URL source:', report.pdf_url);
-      console.log('   Destination:', fileUri);
-      
-      const downloadResult = await FileSystem.downloadAsync(report.pdf_url, fileUri);
-
-      console.log('📥 Résultat du téléchargement:', {
-        status: downloadResult.status,
-        uri: downloadResult.uri,
-        headers: downloadResult.headers,
-      });
-
-      if (downloadResult.status === 200 && downloadResult.uri) {
-        // Vérifier que le fichier existe
-        const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
-        if (!fileInfo.exists) {
-          throw new Error('Le fichier téléchargé n\'existe pas');
-        }
-        
-        console.log('   Taille du fichier:', fileInfo.size, 'bytes');
-        console.log('🖨️ Impression du fichier:', downloadResult.uri);
-        
+      // Essayer d'abord d'imprimer directement depuis l'URL (plus rapide)
+      try {
+        console.log('🖨️ Tentative d\'impression directe depuis l\'URL...');
         await Print.printAsync({
-          uri: downloadResult.uri,
+          uri: report.pdf_url,
         });
-        console.log('✅ Impression lancée');
-      } else {
-        throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
+        console.log('✅ Impression lancée depuis l\'URL');
+        return;
+      } catch (urlError: any) {
+        console.log('⚠️ Impression directe échouée, téléchargement du fichier...', urlError.message);
+        
+        // Si l'impression directe échoue, télécharger le fichier d'abord
+        const fileName = `rapport-print-${Date.now()}.pdf`;
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+        
+        console.log('📥 Téléchargement du PDF pour impression...');
+        console.log('   URL source:', report.pdf_url);
+        console.log('   Destination:', fileUri);
+        
+        const downloadResult = await FileSystem.downloadAsync(report.pdf_url, fileUri);
+
+        console.log('📥 Résultat du téléchargement:', {
+          status: downloadResult.status,
+          uri: downloadResult.uri,
+          headers: downloadResult.headers,
+        });
+
+        if (downloadResult.status === 200 && downloadResult.uri) {
+          // Vérifier que le fichier existe et a une taille valide
+          const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
+          if (!fileInfo.exists) {
+            throw new Error('Le fichier téléchargé n\'existe pas');
+          }
+          
+          if (fileInfo.size === 0) {
+            throw new Error('Le fichier téléchargé est vide');
+          }
+          
+          console.log('   Taille du fichier:', fileInfo.size, 'bytes');
+          console.log('🖨️ Impression du fichier local:', downloadResult.uri);
+          
+          // Utiliser le fichier local pour l'impression
+          await Print.printAsync({
+            uri: downloadResult.uri,
+            base64: false,
+          });
+          console.log('✅ Impression lancée depuis le fichier local');
+          
+          // Nettoyer le fichier temporaire après un délai
+          setTimeout(async () => {
+            try {
+              const fileExists = await FileSystem.getInfoAsync(downloadResult.uri);
+              if (fileExists.exists) {
+                await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+                console.log('🗑️ Fichier temporaire supprimé');
+              }
+            } catch (cleanupError) {
+              console.warn('⚠️ Erreur lors du nettoyage du fichier temporaire:', cleanupError);
+            }
+          }, 5000);
+        } else {
+          throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
+        }
       }
     } catch (error: any) {
       console.error('❌ Erreur lors de l\'impression:', error);
       console.error('   Message:', error.message);
       console.error('   Code:', error.code);
-      Alert.alert(
-        'Erreur',
-        error.message?.includes('téléchargement')
-          ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
-          : 'Impossible d\'imprimer le PDF. Vérifiez votre connexion.'
-      );
+      console.error('   Stack:', error.stack);
+      
+      let errorMessage = 'Impossible d\'imprimer le PDF.';
+      
+      if (error.message?.includes('téléchargement') || error.message?.includes('download')) {
+        errorMessage = 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.';
+      } else if (error.message?.includes('network') || error.code === 'NETWORK_ERROR') {
+        errorMessage = 'Erreur réseau. Vérifiez votre connexion internet.';
+      } else if (error.message?.includes('permission') || error.code === 'E_PERMISSION_DENIED') {
+        errorMessage = 'Permission refusée. Vérifiez les permissions de l\'application.';
+      } else if (error.message?.includes('format') || error.message?.includes('invalid')) {
+        errorMessage = 'Format de fichier invalide. Le PDF pourrait être corrompu.';
+      }
+      
+      Alert.alert('Erreur d\'impression', errorMessage);
     } finally {
       setIsActionLoading(false);
     }
@@ -470,31 +570,56 @@ export default function ReportDetailsScreen() {
   };
 
   /**
-   * Affiche une section SOAPIE
+   * Affiche une section SOAPIE avec design moderne et épuré (moins de couleurs)
    */
-  const renderSOAPIESection = (title: string, content: any, icon: string) => {
+  const renderSOAPIESection = (
+    sectionKey: 'S' | 'O' | 'A' | 'I' | 'E' | 'P',
+    title: string,
+    description: string,
+    content: any
+  ) => {
     if (!content || (typeof content === 'string' && !content.trim()) || 
         (Array.isArray(content) && content.length === 0) ||
         (typeof content === 'object' && Object.keys(content).length === 0)) {
       return null;
     }
 
+    const sectionConfig = getSoapieConfig(sectionKey);
+
     return (
-      <View style={styles.soapieCard}>
-        <View style={styles.soapieHeader}>
-          <Ionicons name={icon as any} size={20} color="#007AFF" />
-          <Text style={styles.soapieTitle}>{title}</Text>
+      <View style={[styles.soapieCard, { 
+        backgroundColor: theme.colors.backgroundCard,
+        borderColor: theme.colors.borderCard,
+      }]}>
+        <View style={[styles.soapieHeader, { 
+          backgroundColor: theme.resolved === 'dark' ? sectionConfig.bg + '40' : sectionConfig.bg + '15',
+          borderBottomColor: theme.colors.border,
+        }]}>
+          <View style={[styles.soapieIconContainer, { backgroundColor: sectionConfig.bg }]}>
+            <Ionicons name={sectionConfig.icon as any} size={20} color={sectionConfig.color} />
+          </View>
+          <View style={styles.soapieHeaderText}>
+            <View style={styles.soapieTitleRow}>
+              <Text style={[styles.soapieTitle, { color: theme.colors.text }]}>{title}</Text>
+              <View style={[styles.soapieBadge, { backgroundColor: sectionConfig.color }]}>
+                <Text style={styles.soapieBadgeText}>{sectionKey}</Text>
+              </View>
+            </View>
+            <Text style={[styles.soapieDescription, { color: theme.colors.textMuted }]}>{description}</Text>
+          </View>
         </View>
         <View style={styles.soapieContent}>
           {typeof content === 'string' && (
-            <Text style={styles.soapieText}>{content}</Text>
+            <Text style={[styles.soapieText, { color: theme.colors.text }]}>{content}</Text>
           )}
           {Array.isArray(content) && (
             <View style={styles.listContainer}>
               {content.map((item, index) => (
                 <View key={index} style={styles.listItem}>
-                  <Text style={styles.bullet}>•</Text>
-                  <Text style={styles.listText}>{item}</Text>
+                  <View style={[styles.listBullet, { backgroundColor: sectionConfig.bg }]}>
+                    <Ionicons name="checkmark" size={12} color={sectionConfig.color} />
+                  </View>
+                  <Text style={[styles.listText, { color: theme.colors.text }]}>{item}</Text>
                 </View>
               ))}
             </View>
@@ -502,49 +627,127 @@ export default function ReportDetailsScreen() {
           {typeof content === 'object' && !Array.isArray(content) && (
             <View>
               {content.vitals && Object.keys(content.vitals).length > 0 && (
-                <View style={styles.vitalsContainer}>
-                  <Text style={styles.vitalsTitle}>Signes vitaux:</Text>
-                  {content.vitals.temperature && (
-                    <Text style={styles.vitalItem}>Température: {content.vitals.temperature}</Text>
-                  )}
-                  {content.vitals.blood_pressure && (
-                    <Text style={styles.vitalItem}>Tension: {content.vitals.blood_pressure}</Text>
-                  )}
-                  {content.vitals.heart_rate && (
-                    <Text style={styles.vitalItem}>FC: {content.vitals.heart_rate}</Text>
-                  )}
-                  {content.vitals.respiratory_rate && (
-                    <Text style={styles.vitalItem}>FR: {content.vitals.respiratory_rate}</Text>
-                  )}
-                  {content.vitals.spo2 && (
-                    <Text style={styles.vitalItem}>SpO2: {content.vitals.spo2}</Text>
-                  )}
-                  {content.vitals.glycemia && (
-                    <Text style={styles.vitalItem}>Glycémie: {content.vitals.glycemia}</Text>
-                  )}
+                <View style={[styles.vitalsContainer, { 
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                  borderColor: theme.colors.border,
+                }]}>
+                  <View style={styles.vitalsHeader}>
+                    <Ionicons name="pulse" size={18} color={getVitalConfig('blood_pressure').color} />
+                    <Text style={[styles.vitalsTitle, { color: theme.colors.text }]}>Signes vitaux</Text>
+                  </View>
+                  <View style={styles.vitalsGrid}>
+                    {content.vitals.temperature && (() => {
+                      const config = getVitalConfig('temperature');
+                      return (
+                        <View style={[styles.vitalCard, { backgroundColor: config.bg, borderColor: config.color + '30' }]}>
+                          <Ionicons name="thermometer" size={20} color={config.color} />
+                          <Text style={[styles.vitalLabel, { color: theme.colors.textSecondary }]}>Température</Text>
+                          <Text style={[styles.vitalValue, { color: config.color }]}>
+                            {content.vitals.temperature}°C
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                    {content.vitals.blood_pressure && (() => {
+                      const config = getVitalConfig('blood_pressure');
+                      return (
+                        <View style={[styles.vitalCard, { backgroundColor: config.bg, borderColor: config.color + '30' }]}>
+                          <Ionicons name="pulse" size={20} color={config.color} />
+                          <Text style={[styles.vitalLabel, { color: theme.colors.textSecondary }]}>Tension artérielle</Text>
+                          <Text style={[styles.vitalValue, { color: config.color }]}>
+                            {content.vitals.blood_pressure}
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                    {content.vitals.heart_rate && (() => {
+                      const config = getVitalConfig('heart_rate');
+                      return (
+                        <View style={[styles.vitalCard, { backgroundColor: config.bg, borderColor: config.color + '30' }]}>
+                          <Ionicons name="heart" size={20} color={config.color} />
+                          <Text style={[styles.vitalLabel, { color: theme.colors.textSecondary }]}>Fréquence cardiaque</Text>
+                          <Text style={[styles.vitalValue, { color: config.color }]}>
+                            {content.vitals.heart_rate} bpm
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                    {content.vitals.respiratory_rate && (() => {
+                      const config = getVitalConfig('respiratory_rate');
+                      return (
+                        <View style={[styles.vitalCard, { backgroundColor: config.bg, borderColor: config.color + '30' }]}>
+                          <Ionicons name="fitness" size={20} color={config.color} />
+                          <Text style={[styles.vitalLabel, { color: theme.colors.textSecondary }]}>Fréquence respiratoire</Text>
+                          <Text style={[styles.vitalValue, { color: config.color }]}>
+                            {content.vitals.respiratory_rate} /min
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                    {content.vitals.spo2 && (() => {
+                      const config = getVitalConfig('spo2');
+                      return (
+                        <View style={[styles.vitalCard, { backgroundColor: config.bg, borderColor: config.color + '30' }]}>
+                          <Ionicons name="water" size={20} color={config.color} />
+                          <Text style={[styles.vitalLabel, { color: theme.colors.textSecondary }]}>Saturation O₂</Text>
+                          <Text style={[styles.vitalValue, { color: config.color }]}>
+                            {content.vitals.spo2.includes('%') ? content.vitals.spo2 : `${content.vitals.spo2}%`}
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                    {content.vitals.glycemia && (() => {
+                      const config = getVitalConfig('glycemia');
+                      return (
+                        <View style={[styles.vitalCard, { backgroundColor: config.bg, borderColor: config.color + '30' }]}>
+                          <Ionicons name="flask" size={20} color={config.color} />
+                          <Text style={[styles.vitalLabel, { color: theme.colors.textSecondary }]}>Glycémie</Text>
+                          <Text style={[styles.vitalValue, { color: config.color }]}>
+                            {content.vitals.glycemia} g/L
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
                 </View>
               )}
               {content.exam && content.exam.trim() && (
-                <View style={styles.sectionBlock}>
-                  <Text style={styles.sectionLabel}>Examen:</Text>
-                  <Text style={styles.soapieText}>{content.exam}</Text>
+                <View style={[styles.sectionBlock, { borderTopColor: theme.colors.border }]}>
+                  <View style={styles.sectionBlockHeader}>
+                    <Ionicons name="search" size={18} color={theme.colors.primary} />
+                    <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>Examen clinique</Text>
+                  </View>
+                  <Text style={[styles.soapieText, { color: theme.colors.text, lineHeight: 22 }]}>{content.exam}</Text>
                 </View>
               )}
               {content.labs && content.labs.trim() && (
-                <View style={styles.sectionBlock}>
-                  <Text style={styles.sectionLabel}>Analyses:</Text>
-                  <Text style={styles.soapieText}>{content.labs}</Text>
+                <View style={[styles.sectionBlock, { borderTopColor: theme.colors.border }]}>
+                  <View style={styles.sectionBlockHeader}>
+                    <Ionicons name="flask-outline" size={18} color={theme.colors.primary} />
+                    <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>Analyses biologiques</Text>
+                  </View>
+                  <Text style={[styles.soapieText, { color: theme.colors.text, lineHeight: 22 }]}>{content.labs}</Text>
                 </View>
               )}
               {content.medications && Array.isArray(content.medications) && content.medications.length > 0 && (
-                <View style={styles.sectionBlock}>
-                  <Text style={styles.sectionLabel}>Médicaments:</Text>
-                  {content.medications.map((med: string, index: number) => (
-                    <View key={index} style={styles.listItem}>
-                      <Text style={styles.bullet}>•</Text>
-                      <Text style={styles.listText}>{med}</Text>
-                    </View>
-                  ))}
+                <View style={[styles.sectionBlock, { borderTopColor: theme.colors.border }]}>
+                  <View style={styles.sectionBlockHeader}>
+                    <Ionicons name="medical" size={18} color={theme.colors.primary} />
+                    <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>Médicaments ({content.medications.length})</Text>
+                  </View>
+                  <View style={styles.medicationsContainer}>
+                    {content.medications.map((med: string, index: number) => (
+                      <View key={index} style={[styles.medicationItem, { 
+                        backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                        borderColor: theme.colors.border,
+                      }]}>
+                        <View style={[styles.medicationIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                          <Ionicons name="pill" size={16} color={theme.colors.primary} />
+                        </View>
+                        <Text style={[styles.medicationText, { color: theme.colors.text }]}>{med}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
             </View>
@@ -556,226 +759,433 @@ export default function ReportDetailsScreen() {
 
   if (isLoading && !report) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <View style={styles.container}>
         <StatusBar style="dark" />
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Détails du rapport</Text>
-          <View style={styles.headerButton} />
-        </View>
+        <ModernHeader
+          title="Chargement..."
+          subtitle="Récupération du rapport"
+          icon="document-text"
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.loadingText}>Chargement des détails...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!report) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Détails du rapport</Text>
-          <View style={styles.headerButton} />
-        </View>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+        <ModernHeader
+          title="Rapport non trouvé"
+          subtitle="Impossible de charger les données"
+          icon="alert-circle"
+        />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color="#FF3B30" />
-          <Text style={styles.errorTitle}>Rapport non trouvé</Text>
-          <Text style={styles.errorText}>Impossible de charger les détails du rapport.</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchReportDetails}>
+          <Ionicons name="alert-circle-outline" size={64} color={theme.colors.error} />
+          <Text style={[styles.errorTitle, { color: theme.colors.text }]}>Rapport non trouvé</Text>
+          <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>Impossible de charger les détails du rapport.</Text>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.colors.primary }]} onPress={fetchReportDetails}>
             <Text style={styles.retryButtonText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Détails du rapport</Text>
-        <View style={styles.headerButton} />
-      </View>
+    <Animated.View 
+      style={[
+        { flex: 1 },
+        {
+          opacity: screenOpacity,
+          transform: [{ translateY: screenTranslateY }],
+        },
+      ]}
+    >
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+        
+        {/* Header moderne */}
+        <ModernHeader
+          title={`Rapport ${report.patient.full_name}`}
+          subtitle="Consultation et documentation SOAPIE"
+          icon="document-text"
+        />
 
-      <ScrollView
+        <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 24 }]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={fetchReportDetails}
-            tintColor="#007AFF"
+            tintColor={theme.colors.primary}
           />
         }
       >
-        {/* Section Patient */}
-        <View style={styles.patientCard}>
-          <View style={styles.patientHeader}>
-            <View style={styles.patientNameContainer}>
-              <Text style={styles.patientName}>{report.patient.full_name}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
-                <Text style={styles.statusText}>{getStatusText(report.status)}</Text>
+        {/* Section Patient - Design moderne */}
+        <View style={[styles.patientCard, { 
+          backgroundColor: theme.colors.backgroundCard,
+          borderColor: theme.colors.borderCard,
+        }]}>
+          <View style={styles.patientGradient}>
+            <View style={styles.patientHeader}>
+              <View style={styles.patientHeaderInfo}>
+                <View style={styles.patientNameRow}>
+                  <View style={styles.patientNameContainer}>
+                    <Text style={[styles.patientName, { color: theme.colors.text }]}>{report.patient.full_name}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
+                      <Ionicons 
+                        name={report.status === 'final' ? 'checkmark-circle' : report.status === 'draft' ? 'create-outline' : 'trash-outline'} 
+                        size={12} 
+                        color="#FFFFFF" 
+                      />
+                      <Text style={styles.statusText}>{getStatusText(report.status)}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.patientInfoGrid}>
+                  {report.patient.age && (
+                    <View style={[styles.patientInfoItem, { 
+                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                      borderColor: theme.colors.border,
+                    }]}>
+                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                        <Ionicons name="calendar" size={16} color={theme.colors.primary} />
+                      </View>
+                      <View style={styles.patientInfoTextContainer}>
+                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Âge</Text>
+                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.age} ans</Text>
+                      </View>
+                    </View>
+                  )}
+                  {report.patient.gender && (
+                    <View style={[styles.patientInfoItem, { 
+                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                      borderColor: theme.colors.border,
+                    }]}>
+                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                        <Ionicons 
+                          name={report.patient.gender.toLowerCase().includes('f') ? "female" : "male"} 
+                          size={16} 
+                          color={theme.colors.primary} 
+                        />
+                      </View>
+                      <View style={styles.patientInfoTextContainer}>
+                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Genre</Text>
+                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.gender}</Text>
+                      </View>
+                    </View>
+                  )}
+                  {report.patient.room_number && (
+                    <View style={[styles.patientInfoItem, { 
+                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                      borderColor: theme.colors.border,
+                    }]}>
+                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                        <Ionicons name="bed" size={16} color={theme.colors.primary} />
+                      </View>
+                      <View style={styles.patientInfoTextContainer}>
+                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Chambre</Text>
+                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.room_number}</Text>
+                      </View>
+                    </View>
+                  )}
+                  {report.patient.unit && (
+                    <View style={[styles.patientInfoItem, { 
+                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                      borderColor: theme.colors.border,
+                    }]}>
+                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                        <Ionicons name="business" size={16} color={theme.colors.primary} />
+                      </View>
+                      <View style={styles.patientInfoTextContainer}>
+                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Unité</Text>
+                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]} numberOfLines={1}>{report.patient.unit}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+            <View style={[styles.dateContainer, { borderTopColor: theme.colors.border }]}>
+              <Ionicons name="time" size={16} color={theme.colors.textMuted} />
+              <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>{formatDate(report.created_at)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Section SOAPIE - Design moderne avec explications */}
+        <View style={styles.soapieSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="document-text" size={24} color={theme.colors.primary} />
+              </View>
+              <View>
+                <Text style={styles.sectionTitle}>Résumé SOAPIE</Text>
+                <Text style={styles.sectionSubtitle}>Méthode de documentation médicale structurée</Text>
               </View>
             </View>
           </View>
           
-          <View style={styles.patientInfo}>
-            {report.patient.age && (
-              <View style={styles.infoRow}>
-                <Ionicons name="calendar-outline" size={16} color="#8E8E93" />
-                <Text style={styles.infoText}>{report.patient.age} ans</Text>
-              </View>
-            )}
-            {report.patient.gender && (
-              <View style={styles.infoRow}>
-                <Ionicons name="person-outline" size={16} color="#8E8E93" />
-                <Text style={styles.infoText}>{report.patient.gender}</Text>
-              </View>
-            )}
-            {report.patient.room_number && (
-              <View style={styles.infoRow}>
-                <Ionicons name="bed-outline" size={16} color="#8E8E93" />
-                <Text style={styles.infoText}>Chambre {report.patient.room_number}</Text>
-              </View>
-            )}
-            {report.patient.unit && (
-              <View style={styles.infoRow}>
-                <Ionicons name="business-outline" size={16} color="#8E8E93" />
-                <Text style={styles.infoText}>{report.patient.unit}</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.dateContainer}>
-            <Ionicons name="time-outline" size={16} color="#8E8E93" />
-            <Text style={styles.dateText}>{formatDate(report.created_at)}</Text>
-          </View>
+          {renderSOAPIESection(
+            'S',
+            'Subjective',
+            'Motif de consultation et symptômes rapportés par le patient',
+            report.soapie.S
+          )}
+          {renderSOAPIESection(
+            'O',
+            'Objective',
+            'Observations cliniques, signes vitaux et examens objectifs',
+            report.soapie.O
+          )}
+          {renderSOAPIESection(
+            'A',
+            'Assessment',
+            'Évaluation et diagnostic basé sur les données S et O',
+            report.soapie.A
+          )}
+          {renderSOAPIESection(
+            'I',
+            'Intervention',
+            'Actions thérapeutiques et traitements administrés',
+            report.soapie.I
+          )}
+          {renderSOAPIESection(
+            'E',
+            'Evaluation',
+            'Évaluation de la réponse du patient aux interventions',
+            report.soapie.E
+          )}
+          {renderSOAPIESection(
+            'P',
+            'Plan',
+            'Plan de suivi et prochaines étapes de prise en charge',
+            report.soapie.P
+          )}
         </View>
 
-        {/* Section SOAPIE */}
-        <View style={styles.soapieSection}>
-          <Text style={styles.sectionTitle}>Résumé SOAPIE</Text>
-          
-          {renderSOAPIESection('S - Subjective', report.soapie.S, 'chatbubble-outline')}
-          {renderSOAPIESection('O - Objective', report.soapie.O, 'eye-outline')}
-          {renderSOAPIESection('A - Assessment', report.soapie.A, 'analytics-outline')}
-          {renderSOAPIESection('I - Intervention', report.soapie.I, 'medical-outline')}
-          {renderSOAPIESection('E - Evaluation', report.soapie.E, 'checkmark-circle-outline')}
-          {renderSOAPIESection('P - Plan', report.soapie.P, 'clipboard-outline')}
-        </View>
-
-        {/* Section PDF Actions */}
-        <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Actions PDF</Text>
+        {/* Section PDF Actions - Design moderne */}
+        <View style={[styles.actionsSection, { 
+          backgroundColor: theme.colors.backgroundCard,
+          borderRadius: 16,
+          padding: 20,
+          borderWidth: 1,
+          borderColor: theme.colors.borderCard,
+        }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="document-attach" size={24} color={theme.colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Document PDF</Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>Consulter, partager ou imprimer le rapport</Text>
+              </View>
+            </View>
+          </View>
           
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, { 
+              backgroundColor: theme.colors.primary,
+            }]}
             onPress={handleOpenPDF}
             disabled={isActionLoading || !report.pdf_url}
+            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            activeOpacity={0.8}
           >
-            <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>Ouvrir le PDF</Text>
+            <View style={styles.primaryButtonIcon}>
+              <Ionicons name="document-text" size={24} color="#FFFFFF" />
+            </View>
+            <View style={styles.primaryButtonContent}>
+              <Text style={styles.primaryButtonText}>Ouvrir le PDF</Text>
+              <Text style={styles.primaryButtonSubtext}>Visualiser le rapport complet</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" style={{ opacity: 0.7 }} />
           </TouchableOpacity>
 
           <View style={styles.secondaryActions}>
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, {
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                borderColor: theme.colors.border,
+              }]}
               onPress={handleSharePDF}
               disabled={isActionLoading || !report.pdf_url}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="share-outline" size={22} color="#007AFF" />
-              <Text style={styles.secondaryButtonText}>Partager</Text>
+              <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="share-social" size={22} color={theme.colors.primary} />
+              </View>
+              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Partager</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, {
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                borderColor: theme.colors.border,
+              }]}
               onPress={handlePrintPDF}
               disabled={isActionLoading || !report.pdf_url}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="print-outline" size={22} color="#007AFF" />
-              <Text style={styles.secondaryButtonText}>Imprimer</Text>
+              <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="print" size={22} color={theme.colors.primary} />
+              </View>
+              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Imprimer</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, {
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                borderColor: theme.colors.border,
+              }]}
               onPress={handleDownloadPDF}
               disabled={isActionLoading || !report.pdf_url}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="download-outline" size={22} color="#007AFF" />
-              <Text style={styles.secondaryButtonText}>Télécharger</Text>
+              <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="download" size={22} color={theme.colors.primary} />
+              </View>
+              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Télécharger</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Section Actions Statut */}
-        <View style={styles.statusActionsSection}>
-          <Text style={styles.sectionTitle}>Gestion du rapport</Text>
+        {/* Section Actions Statut - Design moderne */}
+        <View style={[styles.statusActionsSection, {
+          backgroundColor: theme.colors.backgroundCard,
+          borderRadius: 16,
+          padding: 20,
+          borderWidth: 1,
+          borderColor: theme.colors.borderCard,
+        }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="settings" size={24} color={theme.colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Gestion du rapport</Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>Modifier le statut ou éditer le contenu</Text>
+              </View>
+            </View>
+          </View>
           
           {/* Bouton Modifier */}
           <TouchableOpacity
-            style={[styles.statusButton, styles.editButton]}
+            style={[styles.statusButton, {
+              backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+              borderColor: theme.colors.primary,
+            }]}
             onPress={handleEditReport}
             disabled={isActionLoading}
+            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            activeOpacity={0.7}
           >
-            <Ionicons name="create-outline" size={20} color="#007AFF" />
-            <Text style={[styles.statusButtonText, { color: '#007AFF' }]}>Modifier le rapport</Text>
+            <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+              <Ionicons name="create" size={20} color={theme.colors.primary} />
+            </View>
+            <View style={styles.statusButtonContent}>
+              <Text style={[styles.statusButtonText, { color: theme.colors.primary }]}>Modifier le rapport</Text>
+              <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Éditer les informations SOAPIE</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.primary} />
           </TouchableOpacity>
           
           {report.status !== 'draft' && (
             <TouchableOpacity
-              style={styles.statusButton}
+              style={[styles.statusButton, { 
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFFBF5',
+                borderColor: theme.colors.warning,
+              }]}
               onPress={() => handleUpdateStatus('draft')}
               disabled={isActionLoading}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="save-outline" size={20} color="#FFD60A" />
-              <Text style={[styles.statusButtonText, { color: '#FFD60A' }]}>Mettre en brouillon</Text>
+              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.warningLight }]}>
+                <Ionicons name="save" size={20} color={theme.colors.warning} />
+              </View>
+              <View style={styles.statusButtonContent}>
+                <Text style={[styles.statusButtonText, { color: theme.colors.warning }]}>Mettre en brouillon</Text>
+                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Conserver comme brouillon</Text>
+              </View>
             </TouchableOpacity>
           )}
           
           {report.status !== 'final' && (
             <TouchableOpacity
-              style={styles.statusButton}
+              style={[styles.statusButton, { 
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F0F9F4',
+                borderColor: theme.colors.success,
+              }]}
               onPress={() => handleUpdateStatus('final')}
               disabled={isActionLoading}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="checkmark-circle-outline" size={20} color="#007AFF" />
-              <Text style={[styles.statusButtonText, { color: '#007AFF' }]}>
-                {report.status === 'trash' ? 'Restaurer' : 'Finaliser'}
-              </Text>
+              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.successLight }]}>
+                <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+              </View>
+              <View style={styles.statusButtonContent}>
+                <Text style={[styles.statusButtonText, { color: theme.colors.success }]}>
+                  {report.status === 'trash' ? 'Restaurer' : 'Finaliser'}
+                </Text>
+                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>
+                  {report.status === 'trash' ? 'Restaurer le rapport' : 'Marquer comme finalisé'}
+                </Text>
+              </View>
             </TouchableOpacity>
           )}
           
           {report.status !== 'trash' && (
             <TouchableOpacity
-              style={styles.statusButton}
+              style={[styles.statusButton, { 
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFF5F5',
+                borderColor: theme.colors.error,
+              }]}
               onPress={() => handleUpdateStatus('trash')}
               disabled={isActionLoading}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-              <Text style={[styles.statusButtonText, { color: '#FF3B30' }]}>Mettre à la corbeille</Text>
+              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.errorLight }]}>
+                <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
+              </View>
+              <View style={styles.statusButtonContent}>
+                <Text style={[styles.statusButtonText, { color: theme.colors.error }]}>Mettre à la corbeille</Text>
+                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Déplacer vers la corbeille</Text>
+              </View>
             </TouchableOpacity>
           )}
           
           {report.status === 'trash' && (
             <TouchableOpacity
-              style={styles.statusButton}
+              style={[styles.statusButton, {
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFEBEE',
+                borderColor: theme.colors.error,
+              }]}
               onPress={handleDeletePermanently}
               disabled={isActionLoading}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}
+              activeOpacity={0.7}
             >
-              <Ionicons name="trash" size={20} color="#FF3B30" />
-              <Text style={[styles.statusButtonText, { color: '#FF3B30' }]}>Supprimer définitivement</Text>
+              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.errorLight }]}>
+                <Ionicons name="trash" size={20} color={theme.colors.error} />
+              </View>
+              <View style={styles.statusButtonContent}>
+                <Text style={[styles.statusButtonText, { color: theme.colors.error }]}>Supprimer définitivement</Text>
+                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Cette action est irréversible</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -793,17 +1203,18 @@ export default function ReportDetailsScreen() {
       {/* Loading Overlay */}
       {isActionLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       )}
-    </SafeAreaView>
+    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    // backgroundColor appliqué dynamiquement
   },
   header: {
     flexDirection: 'row',
@@ -821,10 +1232,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: '700',
+    // color appliqué dynamiquement
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    // color appliqué dynamiquement
+    textAlign: 'center',
   },
   scrollView: {
     flex: 1,
@@ -874,172 +1298,348 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   patientCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
+    marginBottom: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
+    // backgroundColor appliqué dynamiquement
+  },
+  patientGradient: {
     padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   patientHeader: {
     marginBottom: 16,
+  },
+  patientHeaderInfo: {
+    flex: 1,
+  },
+  patientNameRow: {
+    marginBottom: 12,
   },
   patientNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
+    gap: 12,
   },
   patientName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#000',
+    // color appliqué dynamiquement
     flex: 1,
-    marginRight: 12,
+    letterSpacing: -0.5,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 16,
+    gap: 4,
   },
   statusText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
   },
-  patientInfo: {
+  patientInfoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 12,
-    gap: 16,
+    gap: 12,
   },
-  infoRow: {
+  patientInfoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    // backgroundColor appliqué dynamiquement
+    padding: 12,
+    borderRadius: 12,
+    flex: 1,
+    minWidth: '45%',
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
-  infoText: {
+  patientInfoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  patientInfoTextContainer: {
+    flex: 1,
+  },
+  patientInfoLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    // color appliqué dynamiquement
+    marginBottom: 2,
+  },
+  patientInfoValue: {
     fontSize: 14,
-    color: '#8E8E93',
+    fontWeight: '600',
+    // color appliqué dynamiquement
   },
   dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 12,
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+    // borderTopColor appliqué dynamiquement
   },
   dateText: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 13,
+    fontWeight: '500',
+    // color appliqué dynamiquement
+  },
+  sectionHeader: {
+    marginBottom: 20,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#000',
-    marginBottom: 16,
+    // color appliqué dynamiquement
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '400',
+    // color appliqué dynamiquement
   },
   soapieSection: {
     marginBottom: 24,
   },
   soapieCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    // backgroundColor appliqué dynamiquement
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
   soapieHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    padding: 16,
+    gap: 12,
+    borderBottomWidth: 1,
+    // borderBottomColor appliqué dynamiquement
+  },
+  soapieIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  soapieHeaderText: {
+    flex: 1,
+  },
+  soapieTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   soapieTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+    letterSpacing: -0.2,
+  },
+  soapieBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  soapieBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  soapieDescription: {
+    fontSize: 13,
+    fontWeight: '400',
+    // color appliqué dynamiquement
+    lineHeight: 18,
   },
   soapieContent: {
-    marginTop: 8,
+    padding: 16,
+    paddingTop: 0,
   },
   soapieText: {
-    fontSize: 14,
-    color: '#000',
-    lineHeight: 20,
+    fontSize: 15,
+    // color appliqué dynamiquement
+    lineHeight: 22,
+    fontWeight: '400',
   },
   listContainer: {
-    marginTop: 4,
+    marginTop: 8,
   },
   listItem: {
     flexDirection: 'row',
-    marginBottom: 8,
-    gap: 8,
+    marginBottom: 12,
+    gap: 12,
+    alignItems: 'flex-start',
   },
-  bullet: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: 'bold',
+  listBullet: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
   },
   listText: {
     flex: 1,
-    fontSize: 14,
-    color: '#000',
-    lineHeight: 20,
+    fontSize: 15,
+    // color appliqué dynamiquement
+    lineHeight: 22,
+    fontWeight: '400',
   },
   vitalsContainer: {
-    marginBottom: 12,
-    padding: 12,
-    backgroundColor: '#F5F5F7',
-    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 16,
+    padding: 16,
+    // backgroundColor appliqué dynamiquement
+    borderRadius: 12,
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
+  },
+  vitalsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
   },
   vitalsTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#000',
-    marginBottom: 8,
+    // color appliqué dynamiquement
   },
-  vitalItem: {
-    fontSize: 14,
-    color: '#000',
+  vitalsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  vitalCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+  },
+  vitalLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    // color appliqué dynamiquement
+    marginTop: 8,
     marginBottom: 4,
+    textAlign: 'center',
+  },
+  vitalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   sectionBlock: {
-    marginTop: 12,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    // borderTopColor appliqué dynamiquement
+  },
+  sectionBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#000',
-    marginBottom: 6,
+    // color appliqué dynamiquement
+  },
+  medicationsContainer: {
+    marginTop: 8,
+  },
+  medicationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    // backgroundColor appliqué dynamiquement
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    gap: 12,
+  },
+  medicationIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    // backgroundColor appliqué dynamiquement
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  medicationText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    // color appliqué dynamiquement
   },
   actionsSection: {
     marginBottom: 24,
+    // backgroundColor, borderRadius, padding, borderWidth, borderColor appliqués dynamiquement
   },
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    // backgroundColor appliqué dynamiquement
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    gap: 12,
+    marginTop: 16,
+  },
+  primaryButtonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
-    backgroundColor: '#007AFF',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginBottom: 12,
-    gap: 8,
+    alignItems: 'center',
+  },
+  primaryButtonContent: {
+    flex: 1,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  primaryButtonSubtext: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '400',
+    opacity: 0.8,
   },
   secondaryActions: {
     flexDirection: 'row',
@@ -1047,45 +1647,72 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    // backgroundColor appliqué dynamiquement
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    gap: 6,
+    // borderColor appliqué dynamiquement
+    gap: 8,
+  },
+  secondaryButtonIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
+    // color appliqué dynamiquement
+    fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
   },
   statusActionsSection: {
     marginBottom: 24,
+    // backgroundColor, borderRadius, padding, borderWidth, borderColor appliqués dynamiquement
   },
   statusButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
+    // backgroundColor appliqué dynamiquement
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    gap: 10,
+    borderRadius: 14,
+    marginBottom: 12,
+    marginTop: 12,
+    borderWidth: 1.5,
+    // borderColor appliqué dynamiquement
+    gap: 12,
   },
   editButton: {
-    borderColor: '#007AFF',
-    borderWidth: 2,
-    backgroundColor: '#F0F8FF',
+    // borderColor appliqué dynamiquement
+    // backgroundColor appliqué dynamiquement
+  },
+  deleteButton: {
+    // borderColor appliqué dynamiquement
+    backgroundColor: '#FFEBEE',
+  },
+  statusButtonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusButtonContent: {
+    flex: 1,
   },
   statusButtonText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  statusButtonSubtext: {
+    fontSize: 12,
+    fontWeight: '400',
+    // color appliqué dynamiquement
   },
   backButton: {
     backgroundColor: '#FFFFFF',

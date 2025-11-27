@@ -15,10 +15,10 @@ const os = require('os');
 // ============================================================================
 
 const MARGINS = {
-  top: 60,      // Marge supérieure pour header
-  bottom: 60,   // Marge inférieure pour footer
-  left: 50,     // Marge gauche large (1.7cm)
-  right: 50     // Marge droite large (1.7cm)
+  top: 50,      // Marge supérieure pour header (réduite)
+  bottom: 40,   // Marge inférieure pour footer (réduite)
+  left: 40,     // Marge gauche (réduite)
+  right: 40     // Marge droite (réduite)
 };
 
 const COLORS = {
@@ -171,7 +171,7 @@ function ensurePageSpace(doc, requiredHeight) {
  * Rend le header premium avec logo et informations
  */
 function renderHeader(doc, recordedAt, createdAt, contentWidth) {
-  const headerHeight = 90;
+  const headerHeight = 65; // Réduit de 90 à 65
   const dateTime = recordedAt || createdAt || new Date();
   
   // Bandeau principal bleu médical
@@ -180,34 +180,34 @@ function renderHeader(doc, recordedAt, createdAt, contentWidth) {
      .fill();
   
   // Logo/Titre de l'application (à gauche)
-  doc.fontSize(18)
+  doc.fontSize(16) // Réduit de 18 à 16
      .fillColor(COLORS.white)
      .font(FONTS.title)
-     .text('AI Medical Dictation', MARGINS.left, 25, {
+     .text('AI Medical Dictation', MARGINS.left, 18, {
        width: contentWidth * 0.6,
        align: 'left'
      });
   
   // Sous-titre
-  doc.fontSize(11)
+  doc.fontSize(10) // Réduit de 11 à 10
      .fillColor(COLORS.white)
      .font(FONTS.body)
      .opacity(0.9)
-     .text('Rapport infirmier – Format SOAPIE', MARGINS.left, 48, {
+     .text('Rapport infirmier – Format SOAPIE', MARGINS.left, 38, {
        width: contentWidth * 0.6,
        align: 'left'
      })
      .opacity(1);
   
   // Date et heure (à droite)
-  doc.fontSize(10)
+  doc.fontSize(9) // Réduit de 10 à 9
      .fillColor(COLORS.white)
      .font(FONTS.body)
-     .text(formatDate(dateTime), doc.page.width - MARGINS.right - 200, 30, {
+     .text(formatDate(dateTime), doc.page.width - MARGINS.right - 200, 20, {
        width: 200,
        align: 'right'
      })
-     .text(formatTime(dateTime), doc.page.width - MARGINS.right - 200, 50, {
+     .text(formatTime(dateTime), doc.page.width - MARGINS.right - 200, 38, {
        width: 200,
        align: 'right'
      });
@@ -221,7 +221,7 @@ function renderHeader(doc, recordedAt, createdAt, contentWidth) {
      .stroke()
      .opacity(1);
   
-  doc.y = headerHeight + 30;
+  doc.y = headerHeight + 20; // Réduit de 30 à 20
 }
 
 // ============================================================================
@@ -232,52 +232,68 @@ function renderHeader(doc, recordedAt, createdAt, contentWidth) {
  * Rend la carte patient avec grille 2 colonnes
  */
 function renderPatientCard(doc, patientData, patientId, noteId, contentWidth) {
-  ensurePageSpace(doc, 130);
+  ensurePageSpace(doc, 100); // Réduit de 130 à 100
   
   const cardY = doc.y;
-  const cardHeight = 120;
-  const padding = 20;
+  const padding = 15; // Réduit de 20 à 15
   const columnWidth = (contentWidth - padding * 3) / 2;
   
+  // Compter les champs non vides
+  const fields = [];
+  if (!isEmpty(patientData.full_name) && safeValue(patientData.full_name) !== 'Non renseigné') {
+    fields.push({ label: 'Nom complet', value: patientData.full_name, side: 'left' });
+  }
+  if (!isEmpty(patientData.age) && safeValue(patientData.age) !== 'Non renseigné') {
+    fields.push({ label: 'Âge', value: patientData.age, side: 'left' });
+  }
+  if (!isEmpty(patientData.gender) && safeValue(patientData.gender) !== 'Non renseigné') {
+    fields.push({ label: 'Sexe', value: patientData.gender, side: 'left' });
+  }
+  if (!isEmpty(patientData.room_number) && safeValue(patientData.room_number) !== 'Non renseigné') {
+    fields.push({ label: 'Chambre', value: patientData.room_number, side: 'right' });
+  }
+  if (!isEmpty(patientData.unit) && safeValue(patientData.unit) !== 'Non renseigné') {
+    fields.push({ label: 'Unité / Service', value: patientData.unit, side: 'right' });
+  }
+  
+  if (fields.length === 0) return; // Ne pas afficher si aucun champ
+  
+  const cardHeight = Math.max(80, Math.ceil(fields.length / 2) * 24 + 35); // Hauteur dynamique
+  
   // Fond de la carte avec coins arrondis
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 8)
+  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 6)
      .fillColor(COLORS.backgroundCard)
      .fill()
      .strokeColor(COLORS.border)
-     .lineWidth(0.5)
+     .lineWidth(1) // Augmenté de 0.5 à 1 pour plus de visibilité
      .stroke();
   
   // Titre de section
-  doc.fontSize(10)
+  doc.fontSize(11) // Augmenté de 10 à 11
      .fillColor(COLORS.textMuted)
      .font(FONTS.label)
-     .text('INFORMATIONS PATIENT', MARGINS.left + padding, cardY + 16, {
+     .text('INFORMATIONS PATIENT', MARGINS.left + padding, cardY + 12, {
        width: contentWidth,
        characterSpacing: 1.5
      });
   
-  let y = cardY + 38;
+  let leftY = cardY + 30;
+  let rightY = cardY + 30;
   const leftX = MARGINS.left + padding;
   const rightX = MARGINS.left + padding + columnWidth + padding;
   
-  // Colonne gauche
-  renderPatientField(doc, 'Nom complet', safeValue(patientData.full_name), leftX, y, columnWidth);
-  y += 28;
-  renderPatientField(doc, 'Âge', safeValue(patientData.age), leftX, y, columnWidth);
-  y += 28;
-  renderPatientField(doc, 'Sexe', safeValue(patientData.gender), leftX, y, columnWidth);
-  
-  // Colonne droite
-  y = cardY + 38;
-  renderPatientField(doc, 'Chambre', safeValue(patientData.room_number), rightX, y, columnWidth);
-  y += 28;
-  renderPatientField(doc, 'Unité / Service', safeValue(patientData.unit), rightX, y, columnWidth);
-  y += 28;
-  if (patientId) {
-    renderPatientField(doc, 'ID Patient', patientId.substring(0, 8) + '...', rightX, y, columnWidth);
+  // Répartir les champs
+  fields.forEach(field => {
+    if (field.side === 'left') {
+      renderPatientField(doc, field.label, field.value, leftX, leftY, columnWidth);
+      leftY += 24; // Réduit de 28 à 24
+    } else {
+      renderPatientField(doc, field.label, field.value, rightX, rightY, columnWidth);
+      rightY += 24; // Réduit de 28 à 24
   }
+  });
   
-  doc.y = cardY + cardHeight + 25;
+  doc.y = cardY + cardHeight + 15; // Réduit de 25 à 15
 }
 
 /**
@@ -291,10 +307,10 @@ function renderPatientField(doc, label, value, x, y, width) {
      .text(label.toUpperCase(), x, y, { width, characterSpacing: 0.5 });
   
   // Valeur
-  doc.fontSize(13)
+  doc.fontSize(12) // Réduit de 13 à 12 mais toujours visible
      .fillColor(COLORS.text)
      .font(FONTS.body)
-     .text(value, x, y + 12, { width });
+     .text(value, x, y + 11, { width }); // Réduit de 12 à 11
 }
 
 // ============================================================================
@@ -307,23 +323,36 @@ function renderPatientField(doc, label, value, x, y, width) {
 function renderVitalsTable(doc, vitals, contentWidth) {
   if (!vitals || typeof vitals !== 'object') return;
   
+  // Filtrer uniquement les signes vitaux renseignés
+  const rows = [];
+  if (!isEmpty(vitals.temperature)) {
+    rows.push({ label: 'Température', value: vitals.temperature, unit: '°C' });
+  }
+  if (!isEmpty(vitals.blood_pressure)) {
+    rows.push({ label: 'Tension', value: vitals.blood_pressure, unit: 'cmHg' });
+  }
+  if (!isEmpty(vitals.heart_rate)) {
+    rows.push({ label: 'FC', value: vitals.heart_rate, unit: 'bpm' });
+  }
+  if (!isEmpty(vitals.respiratory_rate)) {
+    rows.push({ label: 'FR', value: vitals.respiratory_rate, unit: '/min' });
+  }
+  if (!isEmpty(vitals.spo2)) {
+    rows.push({ label: 'SpO₂', value: vitals.spo2, unit: '%' });
+  }
+  if (!isEmpty(vitals.glycemia)) {
+    rows.push({ label: 'Glycémie', value: vitals.glycemia, unit: 'g/L' });
+  }
+  
+  if (rows.length === 0) return; // Ne pas afficher si aucun signe vital
+  
   const tableY = doc.y;
-  const rowHeight = 22;
+  const rowHeight = 20; // Réduit de 22 à 20
   const col1Width = contentWidth * 0.5;
   const col2Width = contentWidth * 0.5;
   
-  // Données du tableau
-  const rows = [
-    { label: 'Température', value: vitals.temperature, unit: '°C' },
-    { label: 'Tension', value: vitals.blood_pressure, unit: 'cmHg' },
-    { label: 'FC', value: vitals.heart_rate, unit: 'bpm' },
-    { label: 'FR', value: vitals.respiratory_rate, unit: '/min' },
-    { label: 'SpO₂', value: vitals.spo2, unit: '%' },
-    { label: 'Glycémie', value: vitals.glycemia, unit: 'g/L' }
-  ];
-  
   const tableHeight = rows.length * rowHeight + 2;
-  ensurePageSpace(doc, tableHeight + 20);
+  ensurePageSpace(doc, tableHeight + 15); // Réduit de 20 à 15
   
   // Fond du tableau
   doc.roundedRect(MARGINS.left, tableY, contentWidth, tableHeight, 4)
@@ -345,20 +374,18 @@ function renderVitalsTable(doc, vitals, contentWidth) {
     }
     
     // Label
-    doc.fontSize(10)
+    doc.fontSize(11) // Augmenté de 10 à 11
        .fillColor(COLORS.text)
        .font(FONTS.body)
-       .text(row.label, MARGINS.left + 12, rowY + 6, { width: col1Width - 24 });
+       .text(row.label, MARGINS.left + 12, rowY + 5, { width: col1Width - 24 });
     
     // Valeur
-    const valueText = row.value 
-      ? `${row.value}${row.unit ? row.unit : ''}` 
-      : 'Non renseigné';
+    const valueText = `${row.value}${row.unit ? row.unit : ''}`;
     
-    doc.fontSize(10)
-       .fillColor(row.value ? COLORS.text : COLORS.textMuted)
-       .font(row.value ? FONTS.monospace : FONTS.body)
-       .text(valueText, MARGINS.left + col1Width + 12, rowY + 6, { 
+    doc.fontSize(11) // Augmenté de 10 à 11
+       .fillColor(COLORS.primary) // Changé pour plus de visibilité
+       .font(FONTS.monospace)
+       .text(valueText, MARGINS.left + col1Width + 12, rowY + 5, { 
          width: col2Width - 24,
          align: 'right'
        });
@@ -373,7 +400,7 @@ function renderVitalsTable(doc, vitals, contentWidth) {
     }
   });
   
-  doc.y = tableY + tableHeight + 15;
+  doc.y = tableY + tableHeight + 12; // Réduit de 15 à 12
 }
 
 // ============================================================================
@@ -387,93 +414,82 @@ function renderSection(doc, letter, content, contentWidth) {
   if (isEmpty(content)) return;
   
   const title = SECTION_TITLES[letter] || letter;
-  const description = SECTION_DESCRIPTIONS[letter] || '';
   const sectionColor = COLORS.section[letter.toLowerCase()] || COLORS.backgroundAlt;
   
-  // Estimation de la hauteur
+  // Estimation de la hauteur (réduite)
   const estimatedHeight = Array.isArray(content) 
-    ? content.length * 18 + 100 
-    : String(content).split('\n').length * 16 + 100;
+    ? content.length * 14 + 60 
+    : String(content).split('\n').length * 14 + 60;
   
   ensurePageSpace(doc, estimatedHeight);
   
   const cardY = doc.y;
-  const padding = 20;
-  let cardHeight = 80;
+  const padding = 15; // Réduit de 20 à 15
+  let cardHeight = 50; // Réduit de 80 à 50
   
-  // Barre latérale colorée
-  doc.rect(MARGINS.left, cardY, 4, cardHeight)
+  // Barre latérale colorée (plus épaisse pour visibilité)
+  doc.rect(MARGINS.left, cardY, 5, cardHeight) // Augmenté de 4 à 5
      .fillColor(COLORS.primary)
        .fill();
 
   // Fond de la carte
-  doc.roundedRect(MARGINS.left + 4, cardY, contentWidth - 4, cardHeight, 6)
+  doc.roundedRect(MARGINS.left + 5, cardY, contentWidth - 5, cardHeight, 6)
      .fillColor(COLORS.backgroundCard)
      .fill()
      .strokeColor(COLORS.border)
-     .lineWidth(0.5)
+     .lineWidth(1) // Augmenté de 0.5 à 1
      .stroke();
   
-  // Titre de section
-  doc.fontSize(16)
+  // Titre de section (plus visible)
+  doc.fontSize(15) // Réduit de 16 à 15 mais toujours visible
      .fillColor(COLORS.primary)
      .font(FONTS.title)
-     .text(title, MARGINS.left + padding + 4, cardY + 18, {
-       width: contentWidth - padding * 2 - 4
+     .text(title, MARGINS.left + padding + 5, cardY + 12, {
+       width: contentWidth - padding * 2 - 5
      });
   
-  // Description (optionnelle, discrète)
-  if (description) {
-    doc.fontSize(9)
-       .fillColor(COLORS.textMuted)
-       .font(FONTS.body)
-       .text(description, MARGINS.left + padding + 4, cardY + 40, {
-         width: contentWidth - padding * 2 - 4
-       });
-  }
-  
   // Contenu
-  let contentY = cardY + 60;
+  let contentY = cardY + 32; // Réduit de 60 à 32
   if (Array.isArray(content)) {
-    content.forEach((item, index) => {
-      if (item && String(item).trim()) {
-        doc.fontSize(11)
+    // Filtrer les éléments vides
+    const validItems = content.filter(item => item && String(item).trim());
+    validItems.forEach((item) => {
+      doc.fontSize(11) // Maintenu à 11 pour lisibilité
            .fillColor(COLORS.text)
            .font(FONTS.body)
-           .text(`• ${String(item).trim()}`, MARGINS.left + padding + 4, contentY, {
-             width: contentWidth - padding * 2 - 8 - 4,
+         .text(`• ${String(item).trim()}`, MARGINS.left + padding + 5, contentY, {
+           width: contentWidth - padding * 2 - 10 - 5,
              lineGap: 2
            });
-        contentY = doc.y + 4;
-      }
+      contentY = doc.y + 3; // Réduit de 4 à 3
     });
   } else {
-    doc.fontSize(11)
+    doc.fontSize(11) // Maintenu à 11 pour lisibilité
        .fillColor(COLORS.text)
        .font(FONTS.body)
-       .text(String(content), MARGINS.left + padding + 4, contentY, {
-         width: contentWidth - padding * 2 - 8 - 4,
-         lineGap: 3,
+       .text(String(content), MARGINS.left + padding + 5, contentY, {
+         width: contentWidth - padding * 2 - 10 - 5,
+         lineGap: 2, // Réduit de 3 à 2
          align: 'justify'
        });
   }
   
   // Ajuster la hauteur de la carte
-  cardHeight = Math.max(cardHeight, doc.y - cardY + 15);
+  cardHeight = Math.max(cardHeight, doc.y - cardY + 12); // Réduit de 15 à 12
   
   // Redessiner la carte avec la bonne hauteur
-  doc.rect(MARGINS.left, cardY, 4, cardHeight)
+  doc.rect(MARGINS.left, cardY, 5, cardHeight)
      .fillColor(COLORS.primary)
      .fill();
   
-  doc.roundedRect(MARGINS.left + 4, cardY, contentWidth - 4, cardHeight, 6)
+  doc.roundedRect(MARGINS.left + 5, cardY, contentWidth - 5, cardHeight, 6)
      .fillColor(COLORS.backgroundCard)
        .fill()
      .strokeColor(COLORS.border)
-     .lineWidth(0.5)
+     .lineWidth(1)
        .stroke();
 
-  doc.y = cardY + cardHeight + 20;
+  doc.y = cardY + cardHeight + 12; // Réduit de 20 à 12
 }
 
 /**
@@ -482,15 +498,15 @@ function renderSection(doc, letter, content, contentWidth) {
 function renderObjectiveSection(doc, objective, contentWidth) {
   if (!objective || typeof objective !== 'object') return;
   
-  const hasVitals = objective.vitals && Object.keys(objective.vitals).some(k => objective.vitals[k]);
+  const hasVitals = objective.vitals && Object.keys(objective.vitals).some(k => !isEmpty(objective.vitals[k]));
   const hasExam = !isEmpty(objective.exam);
   const hasLabs = !isEmpty(objective.labs);
-  const hasMedications = Array.isArray(objective.medications) && objective.medications.length > 0;
+  const hasMedications = Array.isArray(objective.medications) && objective.medications.some(m => !isEmpty(m));
   
   if (!hasVitals && !hasExam && !hasLabs && !hasMedications) return;
   
-  // Titre de section O
-  ensurePageSpace(doc, 300);
+  // Titre de section O (compact)
+  ensurePageSpace(doc, 200); // Réduit de 300 à 200
   renderSectionTitle(doc, 'O', SECTION_TITLES.O, contentWidth);
   
   // Signes vitaux (tableau)
@@ -500,49 +516,49 @@ function renderObjectiveSection(doc, objective, contentWidth) {
   
   // Examen physique
   if (hasExam) {
-    doc.fontSize(12)
-       .fillColor(COLORS.text)
+    doc.fontSize(12) // Maintenu pour visibilité
+       .fillColor(COLORS.primary) // Changé pour plus de visibilité
        .font(FONTS.subtitle)
        .text('Examen physique', MARGINS.left, doc.y, { width: contentWidth });
-    doc.y += 8;
+    doc.y += 6; // Réduit de 8 à 6
     
       doc.fontSize(11)
        .fillColor(COLORS.text)
        .font(FONTS.body)
-       .text(safeValue(objective.exam), MARGINS.left, doc.y, {
+       .text(objective.exam.trim(), MARGINS.left, doc.y, {
          width: contentWidth,
-         lineGap: 3,
+         lineGap: 2, // Réduit de 3 à 2
          align: 'justify'
        });
-    doc.y += 20;
+    doc.y += 12; // Réduit de 20 à 12
   }
   
   // Laboratoires
   if (hasLabs) {
     doc.fontSize(12)
-       .fillColor(COLORS.text)
+       .fillColor(COLORS.primary) // Changé pour plus de visibilité
        .font(FONTS.subtitle)
        .text('Résultats de laboratoire', MARGINS.left, doc.y, { width: contentWidth });
-    doc.y += 8;
+    doc.y += 6; // Réduit de 8 à 6
     
       doc.fontSize(11)
        .fillColor(COLORS.text)
        .font(FONTS.body)
-       .text(safeValue(objective.labs), MARGINS.left, doc.y, {
+       .text(objective.labs.trim(), MARGINS.left, doc.y, {
          width: contentWidth,
-         lineGap: 3,
+         lineGap: 2, // Réduit de 3 à 2
          align: 'justify'
        });
-    doc.y += 20;
+    doc.y += 12; // Réduit de 20 à 12
   }
   
   // Médicaments
   if (hasMedications) {
     doc.fontSize(12)
-       .fillColor(COLORS.text)
+       .fillColor(COLORS.primary) // Changé pour plus de visibilité
        .font(FONTS.subtitle)
        .text('Médicaments', MARGINS.left, doc.y, { width: contentWidth });
-    doc.y += 8;
+    doc.y += 6; // Réduit de 8 à 6
     
     objective.medications.forEach((med) => {
       if (med && String(med).trim()) {
@@ -553,30 +569,30 @@ function renderObjectiveSection(doc, objective, contentWidth) {
              width: contentWidth,
              lineGap: 2
            });
-        doc.y += 16;
+        doc.y += 12; // Réduit de 16 à 12
       }
     });
   }
   
-  doc.y += 15;
+  doc.y += 10; // Réduit de 15 à 10
 }
 
 /**
  * Rend le titre d'une section avec style moderne
  */
 function renderSectionTitle(doc, letter, title, contentWidth) {
-  doc.fontSize(20)
+  doc.fontSize(16) // Réduit de 20 à 16
      .fillColor(COLORS.primary)
      .font(FONTS.title)
      .text(title, MARGINS.left, doc.y, { width: contentWidth });
   
-  doc.moveTo(MARGINS.left, doc.y + 8)
-     .lineTo(MARGINS.left + 60, doc.y + 8)
+  doc.moveTo(MARGINS.left, doc.y + 6) // Réduit de 8 à 6
+     .lineTo(MARGINS.left + 50, doc.y + 6) // Réduit de 60 à 50
      .strokeColor(COLORS.primary)
      .lineWidth(2)
      .stroke();
   
-  doc.y += 25;
+  doc.y += 18; // Réduit de 25 à 18
 }
 
 // ============================================================================
@@ -595,7 +611,7 @@ function renderFooter(doc, user, dateTime) {
   for (let i = startPage; i < startPage + pageCount; i++) {
     doc.switchToPage(i);
     
-    const footerY = doc.page.height - MARGINS.bottom + 10;
+    const footerY = doc.page.height - MARGINS.bottom + 5; // Réduit de 10 à 5
     
     // Ligne séparatrice
     doc.moveTo(MARGINS.left, footerY - 20)

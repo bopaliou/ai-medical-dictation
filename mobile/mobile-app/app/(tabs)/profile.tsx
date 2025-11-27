@@ -10,24 +10,43 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
-
-// Couleurs spécifiques pour le profil
-const PROFILE_COLORS = {
-  background: '#F5F6FA',
-  card: '#FFFFFF',
-  logout: '#FF3B30',
-};
+import { useTheme } from '@/contexts/ThemeContext';
+import { Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
+import { fadeIn, slideUp, scaleIn, getCascadeDelay, ANIMATION_DURATION } from '@/utils/animations';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
+  
+  // Animations d'écran : fade + slide-up
+  const screenOpacity = React.useRef(new Animated.Value(0)).current;
+  const screenTranslateY = React.useRef(new Animated.Value(20)).current;
+  
+  // Animation de l'avatar : fade + scale
+  const avatarScale = React.useRef(new Animated.Value(0.8)).current;
+  const avatarOpacity = React.useRef(new Animated.Value(0)).current;
+  
+  React.useEffect(() => {
+    // Animation de l'écran
+    Animated.parallel([
+      fadeIn(screenOpacity, ANIMATION_DURATION.SCREEN_TRANSITION),
+      slideUp(screenTranslateY, 20, ANIMATION_DURATION.SCREEN_TRANSITION),
+    ]).start();
+    
+    // Animation de l'avatar avec délai
+    Animated.parallel([
+      fadeIn(avatarOpacity, ANIMATION_DURATION.NORMAL, 100),
+      scaleIn(avatarScale, 0.8, 1, ANIMATION_DURATION.NORMAL, 100),
+    ]).start();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -116,36 +135,61 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="auto" />
-      
-      {/* Header simple */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Mon profil</Text>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* User Profile Card */}
-        <View style={styles.userProfileCard}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person" size={36} color={Colors.primary} />
-          </View>
-          <Text style={styles.userName}>{user?.full_name || 'Utilisateur'}</Text>
-          <Text style={styles.userRole}>{getRoleLabel()}</Text>
+    <Animated.View 
+      style={[
+        { flex: 1 },
+        {
+          opacity: screenOpacity,
+          transform: [{ translateY: screenTranslateY }],
+        },
+      ]}
+    >
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+        <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+        
+        {/* Header simple */}
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Mon profil</Text>
         </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* User Profile Card */}
+          <View style={[styles.userProfileCard, { 
+            backgroundColor: theme.colors.backgroundCard,
+            borderColor: theme.colors.borderCard,
+          }]}>
+            <Animated.View 
+              style={[
+                styles.avatarContainer, 
+                { backgroundColor: theme.colors.primaryLight },
+                {
+                  opacity: avatarOpacity,
+                  transform: [{ scale: avatarScale }],
+                },
+              ]}
+            >
+              <Ionicons name="person" size={36} color={theme.colors.primary} />
+            </Animated.View>
+            <Text style={[styles.userName, { color: theme.colors.text }]}>{user?.full_name || 'Utilisateur'}</Text>
+            <Text style={[styles.userRole, { color: theme.colors.textSecondary }]}>{getRoleLabel()}</Text>
+          </View>
 
         {/* Settings Cards */}
         {settingsSections.map((section, sectionIndex) => (
-          <View key={sectionIndex} style={styles.settingsSection}>
+          <View key={sectionIndex} style={[styles.settingsSection, { 
+            backgroundColor: theme.colors.backgroundCard,
+            borderColor: theme.colors.borderCard,
+          }]}>
             {section.items.map((item, itemIndex) => (
               <TouchableOpacity
                 key={itemIndex}
                 style={[
                   styles.settingItem,
+                  { borderBottomColor: theme.colors.border },
                   itemIndex === 0 && styles.settingItemFirst,
                   itemIndex === section.items.length - 1 && styles.settingItemLast,
                 ]}
@@ -153,10 +197,12 @@ export default function ProfileScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.settingItemLeft}>
-                  <Ionicons name={item.icon} size={24} color={Colors.text} />
-                  <Text style={styles.settingItemLabel}>{item.label}</Text>
+                  <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                    <Ionicons name={item.icon} size={20} color={theme.colors.primary} />
+                  </View>
+                  <Text style={[styles.settingItemLabel, { color: theme.colors.text }]}>{item.label}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
             ))}
           </View>
@@ -164,33 +210,34 @@ export default function ProfileScreen() {
 
         {/* Bouton Déconnexion */}
         <TouchableOpacity
-          style={styles.logoutButton}
+          style={[styles.logoutButton, { 
+            backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFF5F5',
+            borderColor: theme.colors.error,
+          }]}
           onPress={handleLogout}
           activeOpacity={0.7}
         >
-          <Ionicons name="log-out-outline" size={24} color={PROFILE_COLORS.logout} />
-          <Text style={styles.logoutText}>Déconnexion</Text>
+          <Ionicons name="log-out-outline" size={24} color={theme.colors.error} />
+          <Text style={[styles.logoutText, { color: theme.colors.error }]}>Déconnexion</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: PROFILE_COLORS.background,
   },
   header: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md,
-    backgroundColor: PROFILE_COLORS.background,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.text,
     letterSpacing: -0.5,
   },
   scrollView: {
@@ -202,18 +249,17 @@ const styles = StyleSheet.create({
   },
   // User Profile Card
   userProfileCard: {
-    backgroundColor: PROFILE_COLORS.card,
     borderRadius: BorderRadius.xl,
     padding: Spacing.xxl,
     alignItems: 'center',
-    marginBottom: Spacing.xxl,
-    ...Shadows.md,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
   avatarContainer: {
     width: 72,
     height: 72,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.lg,
@@ -221,23 +267,21 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.text,
     marginBottom: Spacing.xs,
     textAlign: 'center',
   },
   userRole: {
     fontSize: 16,
     fontWeight: '400',
-    color: Colors.textSecondary,
     textAlign: 'center',
   },
   // Settings Cards
   settingsSection: {
-    backgroundColor: PROFILE_COLORS.card,
     borderRadius: BorderRadius.xl,
     marginBottom: Spacing.xl,
     overflow: 'hidden',
-    ...Shadows.sm,
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
   settingItem: {
     flexDirection: 'row',
@@ -246,8 +290,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
     minHeight: 56, // Touch target confortable
+    // borderBottomColor appliqué dynamiquement
   },
   settingItemFirst: {
     // Pas de style spécial pour le premier
@@ -261,28 +305,33 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: Spacing.md,
   },
+  settingIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   settingItemLabel: {
     fontSize: 17,
     fontWeight: '600',
-    color: Colors.text,
   },
   // Bouton Déconnexion
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: PROFILE_COLORS.card,
     borderRadius: BorderRadius.xl,
     paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.xl,
     gap: Spacing.sm,
     marginTop: Spacing.md,
     minHeight: 56, // Touch target confortable
-    ...Shadows.sm,
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
   },
   logoutText: {
     fontSize: 17,
     fontWeight: '600',
-    color: PROFILE_COLORS.logout,
   },
 });

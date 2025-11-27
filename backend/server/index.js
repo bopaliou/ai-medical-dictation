@@ -117,7 +117,7 @@ app.get('/', (req, res) => {
         me: 'GET /api/auth/me (requiert authentification)'
       },
       upload: 'POST /api/upload/audio',
-      patients: 'GET /api/patients, GET /api/patients/:id, POST /api/patients',
+      patients: 'GET /api/patients, GET /api/patients/:id, POST /api/patients, PATCH /api/patients/:id',
       notes: 'GET /api/notes/:patient_id'
     }
   });
@@ -191,7 +191,7 @@ app.use((req, res) => {
           me: 'GET /api/auth/me (requiert authentification)'
         },
       upload: 'POST /api/upload/audio (requiert authentification)',
-      patients: 'GET /api/patients, GET /api/patients/:id, POST /api/patients (requiert authentification)',
+      patients: 'GET /api/patients, GET /api/patients/:id, POST /api/patients, PATCH /api/patients/:id (requiert authentification)',
       notes: 'GET /api/notes/:patient_id (requiert authentification)'
     }
   });

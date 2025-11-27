@@ -37,6 +37,20 @@ export interface CreatePatientResponse {
   patient: Patient;
 }
 
+export interface UpdatePatientData {
+  full_name?: string;
+  age?: string;
+  gender?: 'M' | 'F' | 'Autre' | 'Non précisé' | string;
+  room_number?: string;
+  unit?: string;
+  dob?: string;
+}
+
+export interface UpdatePatientResponse {
+  ok: boolean;
+  patient: Patient;
+}
+
 const CACHE_KEY = 'patients_cache';
 const CACHE_EXPIRY_KEY = 'patients_cache_expiry';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -116,6 +130,19 @@ class PatientsApiService {
     } catch (error: any) {
       console.error('❌ Erreur lors de la recherche de patients:', error);
       
+      // Gestion spécifique des erreurs réseau
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          const errorMessage = `Impossible de se connecter au serveur.\n\n` +
+            `Vérifiez que :\n` +
+            `• Le backend est démarré (port 3000)\n` +
+            `• Votre appareil est sur le même réseau WiFi\n` +
+            `• L'IP dans app.json correspond à votre ordinateur\n` +
+            `\nURL configurée : ${this.baseURL}`;
+          throw new Error(errorMessage);
+        }
+      }
+      
       // Gestion spécifique des erreurs 401
       if (error.response?.status === 401) {
         console.error('🔒 Erreur 401 - Token invalide ou expiré');
@@ -188,6 +215,19 @@ class PatientsApiService {
       return [];
     } catch (error: any) {
       console.error('Erreur lors de la récupération des patients:', error);
+      
+      // Gestion spécifique des erreurs réseau
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          const errorMessage = `Impossible de se connecter au serveur.\n\n` +
+            `Vérifiez que :\n` +
+            `• Le backend est démarré (port 3000)\n` +
+            `• Votre appareil est sur le même réseau WiFi\n` +
+            `• L'IP dans app.json correspond à votre ordinateur\n` +
+            `\nURL configurée : ${this.baseURL}`;
+          throw new Error(errorMessage);
+        }
+      }
       
       // Si erreur 401 avec message "expired", le token est expiré
       if (error.response?.status === 401) {
@@ -284,6 +324,125 @@ class PatientsApiService {
       }
       
       throw error instanceof Error ? error : new Error('Erreur lors de la création du patient');
+    }
+  }
+
+  /**
+   * Met à jour un patient existant
+   */
+  async updatePatient(patientId: string, patientData: UpdatePatientData): Promise<Patient> {
+    try {
+      const token = await this.getAuthToken();
+      if (!token) {
+        throw new Error('Non authentifié');
+      }
+
+      const response = await axios.patch<UpdatePatientResponse>(
+        `${this.baseURL}/api/patients/${patientId}`,
+        patientData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        }
+      );
+
+      if (response.data.ok && response.data.patient) {
+        // Mettre à jour le cache
+        const cachedPatients = await this.getCachedPatients();
+        const updatedIndex = cachedPatients.findIndex(p => p.id === patientId);
+        if (updatedIndex !== -1) {
+          cachedPatients[updatedIndex] = response.data.patient;
+          await this.updateCache(cachedPatients);
+        }
+        
+        return response.data.patient;
+      }
+
+      throw new Error('Réponse invalide du serveur');
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour du patient:', error);
+      
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<{ error: string; message?: string }>;
+        
+        if (axiosError.response?.status === 404) {
+          throw new Error('Patient non trouvé');
+        }
+        
+        if (axiosError.response?.status === 400) {
+          const message = axiosError.response.data?.message || axiosError.response.data?.error || 'Données invalides';
+          throw new Error(message);
+        }
+        
+        if (axiosError.response?.status === 401) {
+          console.error('❌ Erreur 401 - Token invalide ou expiré');
+          if (isTokenExpiredError(error)) {
+            await handleTokenExpiration();
+            throw new Error('Session expirée. Veuillez vous reconnecter.');
+          }
+          throw new Error('Non authentifié. Veuillez vous reconnecter.');
+        }
+        
+        if (axiosError.response?.status === 500) {
+          const backendMessage = axiosError.response.data?.message || axiosError.response.data?.error;
+          const errorMessage = backendMessage 
+            ? `Erreur serveur: ${backendMessage}` 
+            : 'Erreur serveur lors de la mise à jour du patient.';
+          throw new Error(errorMessage);
+        }
+      }
+      
+      throw error instanceof Error ? error : new Error('Erreur lors de la mise à jour du patient');
+    }
+  }
+
+  /**
+   * Récupère un patient par son ID
+   */
+  async getPatientById(patientId: string): Promise<Patient | null> {
+    try {
+      const token = await this.getAuthToken();
+      if (!token) {
+        throw new Error('Non authentifié');
+      }
+
+      const response = await axios.get<{ ok: boolean; patient: Patient }>(
+        `${this.baseURL}/api/patients/${patientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        }
+      );
+
+      if (response.data.ok && response.data.patient) {
+        return response.data.patient;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération du patient:', error);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          return null;
+        }
+        
+        if (error.response?.status === 401) {
+          if (isTokenExpiredError(error)) {
+            await handleTokenExpiration();
+            throw new Error('Session expirée. Veuillez vous reconnecter.');
+          }
+          throw new Error('Non authentifié. Veuillez vous reconnecter.');
+        }
+      }
+      
+      throw error instanceof Error ? error : new Error('Erreur lors de la récupération du patient');
     }
   }
 

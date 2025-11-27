@@ -16,35 +16,46 @@ import {
   RefreshControl,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { patientsApiService, Patient } from '@/services/patientsApi';
-
-// Couleurs médicales premium
-const MEDICAL_COLORS = {
-  primary: '#0A84FF',
-  background: '#F2F4F7',
-  card: '#FFFFFF',
-  text: '#1B1B1D',
-  textSecondary: '#4A4A4A',
-  textMuted: '#8E8E93',
-  border: '#E5E5EA',
-  icon: 'rgba(27, 27, 29, 0.8)', // 80% black opacity
-};
+import { reportApiService, Report } from '@/services/reportApi';
+import { useTheme } from '@/contexts/ThemeContext';
+import { fadeSlideUp, scalePress, scaleRelease, getCascadeDelay, ANIMATION_DURATION } from '@/utils/animations';
+import { Spacing } from '@/constants/design';
 
 type SortType = 'alphabetical' | 'recent';
 
+interface PatientStats {
+  reportsCount: number;
+  lastReportDate?: string;
+  lastReportDetails?: {
+    vitals?: {
+      temperature?: string;
+      blood_pressure?: string;
+      heart_rate?: string;
+      respiratory_rate?: string;
+      spo2?: string;
+      glycemia?: string;
+    };
+    medications?: string[];
+    assessment?: string;
+  };
+}
+
 export default function PatientsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortType, setSortType] = useState<SortType>('alphabetical');
+  const [patientStats, setPatientStats] = useState<Record<string, PatientStats>>({});
 
   const loadPatients = useCallback(async () => {
     try {
@@ -52,6 +63,59 @@ export default function PatientsScreen() {
       const allPatients = await patientsApiService.getAllPatients();
       setPatients(allPatients);
       setFilteredPatients(allPatients);
+
+      // Charger les rapports pour calculer les statistiques et détails médicaux
+      try {
+        const reportsResponse = await reportApiService.getReports({ limit: 1000 });
+        if (reportsResponse.ok && reportsResponse.reports) {
+          const stats: Record<string, PatientStats> = {};
+          
+          // Calculer les statistiques par patient
+          for (const patient of allPatients) {
+            const patientReports = reportsResponse.reports.filter(
+              report => report.patient_id === patient.id && report.status !== 'trash'
+            );
+            
+            const lastReport = patientReports.length > 0
+              ? patientReports.sort((a, b) => 
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                )[0]
+              : null;
+
+            // Charger les détails du dernier rapport pour obtenir les infos médicales
+            // On charge seulement le dernier rapport finalisé pour optimiser
+            let lastReportDetails = undefined;
+            if (lastReport && lastReport.status === 'final') {
+              try {
+                const reportDetails = await reportApiService.getReportDetails(lastReport.id);
+                if (reportDetails.ok && reportDetails.report) {
+                  lastReportDetails = {
+                    vitals: reportDetails.report.soapie?.O?.vitals,
+                    medications: Array.isArray(reportDetails.report.soapie?.O?.medications)
+                      ? reportDetails.report.soapie.O.medications
+                      : undefined,
+                    assessment: reportDetails.report.soapie?.A,
+                  };
+                }
+              } catch (error) {
+                // Ne pas bloquer si les détails ne se chargent pas
+                console.error(`Erreur lors du chargement des détails du rapport ${lastReport.id}:`, error);
+              }
+            }
+            
+            stats[patient.id] = {
+              reportsCount: patientReports.length,
+              lastReportDate: lastReport?.created_at,
+              lastReportDetails,
+            };
+          }
+          
+          setPatientStats(stats);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des rapports:', error);
+        // Ne pas bloquer l'affichage si les rapports ne se chargent pas
+      }
     } catch (error: any) {
       console.error('Erreur lors du chargement des patients:', error);
       if (error.message === 'SESSION_EXPIRED' || error.message?.includes('expiré')) {
@@ -144,105 +208,152 @@ export default function PatientsScreen() {
   };
 
   const handlePatientPress = (patient: Patient) => {
-    // Navigation vers les détails du patient (à implémenter si nécessaire)
-    // Pour l'instant, on peut juste afficher les infos
-    console.log('Patient sélectionné:', patient);
+    // Navigation vers les détails du patient
+    router.push({
+      pathname: '/patient/[id]',
+      params: { id: patient.id },
+    });
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="auto" />
-      
-      {/* Gradient de fond optionnel */}
-      <LinearGradient
-        colors={['#FFFFFF', '#F2F4F7']}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
 
-      {/* Header moderne */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Patients</Text>
-        {!isLoading && (
-          <Text style={styles.subtitle}>
-            {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
-            {searchTerm && ` trouvé${filteredPatients.length > 1 ? 's' : ''}`}
-          </Text>
-        )}
-      </View>
+      {/* Header moderne et élégant avec recherche et filtres intégrés */}
+      <View style={[styles.headerContainer, { 
+        backgroundColor: theme.colors.backgroundCard, 
+        borderBottomColor: theme.colors.border,
+        paddingTop: insets.top + Spacing.lg,
+      }]}>
+        {/* Titre et compteur */}
+        <View style={styles.headerTop}>
+          <View style={styles.headerTitleContainer}>
+            <View style={[styles.headerIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+              <Ionicons name="people" size={22} color={theme.colors.primary} />
+            </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={[styles.title, { color: theme.colors.text }]}>Patients</Text>
+              {!isLoading && (
+                <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                  {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
+                  {searchTerm && ` trouvé${filteredPatients.length > 1 ? 's' : ''}`}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
 
-      {/* Barre de recherche épurée */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color={MEDICAL_COLORS.icon} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher par nom, âge, chambre, service..."
-          placeholderTextColor={MEDICAL_COLORS.textMuted}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-        />
-        {searchTerm.length > 0 && (
-          <TouchableOpacity 
-            onPress={() => setSearchTerm('')} 
-            style={styles.clearButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="close-circle" size={20} color={MEDICAL_COLORS.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
+        {/* Barre de recherche premium */}
+        <View style={[styles.searchContainer, { 
+          backgroundColor: theme.colors.backgroundSecondary, 
+          borderColor: theme.colors.border 
+        }]}>
+          <View style={[styles.searchIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+            <Ionicons name="search" size={18} color={theme.colors.primary} />
+          </View>
+          <TextInput
+            style={[styles.searchInput, { color: theme.colors.text }]}
+            placeholder="Rechercher un patient..."
+            placeholderTextColor={theme.colors.textMuted}
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity 
+              onPress={() => {
+                setSearchTerm('');
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }} 
+              style={styles.clearButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-circle" size={20} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {/* Tri */}
-      <View style={styles.sortContainer}>
-        <Text style={styles.sortLabel}>Trier par :</Text>
-        <View style={styles.sortButtons}>
-          <TouchableOpacity
-            style={[styles.sortButton, sortType === 'alphabetical' && styles.sortButtonActive]}
-            onPress={() => setSortType('alphabetical')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="text-outline" 
-              size={16} 
-              color={sortType === 'alphabetical' ? MEDICAL_COLORS.card : MEDICAL_COLORS.textMuted} 
-            />
-            <Text style={[styles.sortButtonText, sortType === 'alphabetical' && styles.sortButtonTextActive]}>
-              Alphabétique
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sortButton, sortType === 'recent' && styles.sortButtonActive]}
-            onPress={() => setSortType('recent')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="time-outline" 
-              size={16} 
-              color={sortType === 'recent' ? MEDICAL_COLORS.card : MEDICAL_COLORS.textMuted} 
-            />
-            <Text style={[styles.sortButtonText, sortType === 'recent' && styles.sortButtonTextActive]}>
-              Récents
-            </Text>
-          </TouchableOpacity>
+        {/* Filtres de tri modernes */}
+        <View style={styles.sortContainer}>
+          <View style={styles.sortButtons}>
+            <TouchableOpacity
+              style={[
+                styles.sortButton, 
+                { 
+                  backgroundColor: sortType === 'alphabetical' 
+                    ? theme.colors.primary 
+                    : theme.colors.backgroundSecondary, 
+                  borderColor: sortType === 'alphabetical' 
+                    ? theme.colors.primary 
+                    : theme.colors.border 
+                }
+              ]}
+              onPress={() => {
+                setSortType('alphabetical');
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name={sortType === 'alphabetical' ? 'text' : 'text-outline'} 
+                size={16} 
+                color={sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textMuted} 
+              />
+              <Text style={[
+                styles.sortButtonText, 
+                { color: sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textSecondary }
+              ]}>
+                Alphabétique
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sortButton, 
+                { 
+                  backgroundColor: sortType === 'recent' 
+                    ? theme.colors.primary 
+                    : theme.colors.backgroundSecondary, 
+                  borderColor: sortType === 'recent' 
+                    ? theme.colors.primary 
+                    : theme.colors.border 
+                }
+              ]}
+              onPress={() => {
+                setSortType('recent');
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name={sortType === 'recent' ? 'time' : 'time-outline'} 
+                size={16} 
+                color={sortType === 'recent' ? '#FFFFFF' : theme.colors.textMuted} 
+              />
+              <Text style={[
+                styles.sortButtonText, 
+                { color: sortType === 'recent' ? '#FFFFFF' : theme.colors.textSecondary }
+              ]}>
+                Récents
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {/* Liste des patients */}
       {isLoading && !isRefreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={MEDICAL_COLORS.primary} />
-          <Text style={styles.loadingText}>Chargement...</Text>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Chargement...</Text>
         </View>
       ) : filteredPatients.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconContainer}>
-            <Ionicons name="people-outline" size={64} color={MEDICAL_COLORS.textMuted} />
+          <View style={[styles.emptyIconContainer, { backgroundColor: theme.colors.backgroundCard }]}>
+            <Ionicons name="people-outline" size={64} color={theme.colors.textMuted} />
           </View>
-          <Text style={styles.emptyTitle}>
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
             {searchTerm ? 'Aucun patient trouvé' : 'Aucun patient'}
           </Text>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
             {searchTerm
               ? 'Essayez avec d\'autres mots-clés'
               : 'Les patients que vous créez apparaîtront ici'}
@@ -253,7 +364,7 @@ export default function PatientsScreen() {
           style={styles.listContainer}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MEDICAL_COLORS.primary} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
           }
           showsVerticalScrollIndicator={false}
         >
@@ -265,11 +376,13 @@ export default function PatientsScreen() {
               getAvatarColor={getAvatarColor}
               onPress={() => handlePatientPress(patient)}
               index={index}
+              stats={patientStats[patient.id]}
             />
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+      <SafeAreaView style={styles.safeAreaBottom} edges={['bottom']} />
+    </View>
   );
 }
 
@@ -280,43 +393,107 @@ interface PatientCardProps {
   getAvatarColor: (patient: Patient) => string;
   onPress: () => void;
   index: number;
+  stats?: PatientStats;
 }
 
-function PatientCard({ patient, getInitials, getAvatarColor, onPress, index }: PatientCardProps) {
+function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, stats }: PatientCardProps) {
+  const { theme } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
+  const translateYAnim = React.useRef(new Animated.Value(12)).current;
 
+  // Animation d'apparition premium : fade + slide-up avec délai en cascade
   React.useEffect(() => {
-    Animated.timing(opacityAnim, {
-      toValue: 1,
-      duration: 300,
-      delay: index * 30,
-      useNativeDriver: true,
-    }).start();
+    const delay = getCascadeDelay(index, 30);
+    fadeSlideUp(opacityAnim, translateYAnim, 12, ANIMATION_DURATION.CARD_APPEAR, delay).start();
   }, []);
 
+  // Animations de press premium
   const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-    }).start();
+    scalePress(scaleAnim, 0.96).start();
   };
 
   const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
+    scaleRelease(scaleAnim, 1).start();
   };
 
   const initials = getInitials(patient.full_name || '');
   const avatarColor = getAvatarColor(patient);
 
-  // Formater les informations pour affichage rapide
-  const hasAge = !!patient.age;
+  // Calculer l'âge à partir de la date de naissance si disponible
+  const calculateAge = (dob?: string, ageString?: string): string | null => {
+    if (ageString) return ageString;
+    
+    if (dob) {
+      try {
+        const birthDate = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        
+        return age > 0 ? `${age} ans` : null;
+      } catch {
+        return null;
+      }
+    }
+    
+    return null;
+  };
+
+  // Formater les informations pour affichage
+  const calculatedAge = calculateAge(patient.dob, patient.age);
+  const hasAge = !!calculatedAge;
   const hasGender = !!patient.gender;
   const hasRoom = !!patient.room_number;
   const hasUnit = !!patient.unit;
+  const hasCreatedAt = !!patient.created_at;
+  const reportsCount = stats?.reportsCount || 0;
+  const lastReportDate = stats?.lastReportDate;
+  const medicalDetails = stats?.lastReportDetails;
+  const vitals = medicalDetails?.vitals;
+  const medications = medicalDetails?.medications;
+  const assessment = medicalDetails?.assessment;
+
+  // Vérifier si des signes vitaux sont disponibles
+  const hasVitals = vitals && (
+    vitals.blood_pressure || 
+    vitals.temperature || 
+    vitals.heart_rate || 
+    vitals.spo2
+  );
+  const hasMedications = medications && medications.length > 0;
+  const hasAssessment = !!assessment;
+
+  // Formater la date relative
+  const formatRelativeDate = (dateString?: string): string => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) return "Aujourd'hui";
+      if (diffDays === 1) return "Hier";
+      if (diffDays < 7) return `Il y a ${diffDays} jours`;
+      if (diffDays < 30) return `Il y a ${Math.floor(diffDays / 7)} sem.`;
+      
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Compter le nombre d'informations disponibles
+  const infoCount = [hasAge, hasGender, hasRoom, hasUnit].filter(Boolean).length;
 
   return (
     <Animated.View
@@ -324,12 +501,18 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index }: P
         styles.cardWrapper,
         {
           opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
+          transform: [
+            { scale: scaleAnim },
+            { translateY: translateYAnim },
+          ],
         },
       ]}
     >
       <TouchableOpacity
-        style={styles.patientCard}
+        style={[styles.patientCard, { 
+          backgroundColor: theme.colors.backgroundCard, 
+          borderColor: theme.colors.borderCard 
+        }]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -345,51 +528,163 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index }: P
         {/* Contenu principal avec informations détaillées */}
         <View style={styles.cardContent}>
           {/* Nom du patient */}
-          <Text style={styles.patientName} numberOfLines={1}>
+          <Text style={[styles.patientName, { color: theme.colors.text }]} numberOfLines={1}>
             {patient.full_name || 'Patient inconnu'}
           </Text>
 
-          {/* Informations rapides en badges */}
-          <View style={styles.infoBadges}>
+          {/* Ligne principale d'informations - toujours visible */}
+          <View style={styles.mainInfoRow}>
             {hasAge && (
-              <View style={styles.badge}>
-                <Ionicons name="calendar-outline" size={12} color={MEDICAL_COLORS.textSecondary} />
-                <Text style={styles.badgeText}>{patient.age} ans</Text>
+              <View style={styles.infoItem}>
+                <Ionicons name="calendar" size={14} color={theme.colors.primary} />
+                <Text style={[styles.infoText, { color: theme.colors.text }]}>{calculatedAge}</Text>
               </View>
             )}
             {hasGender && (
-              <View style={styles.badge}>
+              <View style={styles.infoItem}>
                 <Ionicons 
-                  name={patient.gender?.toLowerCase().includes('f') ? "female-outline" : "male-outline"} 
-                  size={12} 
-                  color={MEDICAL_COLORS.textSecondary} 
+                  name={patient.gender?.toLowerCase().includes('f') ? "female" : "male"} 
+                  size={14} 
+                  color={theme.colors.primary} 
                 />
-                <Text style={styles.badgeText}>{patient.gender}</Text>
-              </View>
-            )}
-            {hasRoom && (
-              <View style={styles.badge}>
-                <Ionicons name="bed-outline" size={12} color={MEDICAL_COLORS.textSecondary} />
-                <Text style={styles.badgeText}>Ch. {patient.room_number}</Text>
-              </View>
-            )}
-            {hasUnit && (
-              <View style={styles.badge}>
-                <Ionicons name="business-outline" size={12} color={MEDICAL_COLORS.textSecondary} />
-                <Text style={styles.badgeText} numberOfLines={1}>{patient.unit}</Text>
+                <Text style={[styles.infoText, { color: theme.colors.text }]}>{patient.gender}</Text>
               </View>
             )}
           </View>
 
-          {/* Ligne d'informations secondaires si disponibles */}
-          {(hasAge || hasGender || hasRoom || hasUnit) ? null : (
-            <Text style={styles.patientSubLabel}>Informations non renseignées</Text>
+          {/* Ligne secondaire - Chambre et Unité */}
+          {(hasRoom || hasUnit) && (
+            <View style={styles.secondaryInfoRow}>
+              {hasRoom && (
+                <View style={styles.infoItem}>
+                  <Ionicons name="bed" size={14} color={theme.colors.textSecondary} />
+                  <Text style={[styles.secondaryInfoText, { color: theme.colors.textSecondary }]}>Ch. {patient.room_number}</Text>
+                </View>
+              )}
+              {hasUnit && (
+                <View style={styles.infoItem}>
+                  <Ionicons name="business" size={14} color={theme.colors.textSecondary} />
+                  <Text style={[styles.secondaryInfoText, { color: theme.colors.textSecondary }]} numberOfLines={1}>{patient.unit}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Détails médicaux importants */}
+          {(hasVitals || hasMedications || hasAssessment) && (
+            <View style={[styles.medicalDetailsContainer, { borderTopColor: theme.colors.border }]}>
+              {/* Signes vitaux */}
+              {hasVitals && (
+                <View style={styles.vitalsRow}>
+                  {vitals.blood_pressure && (
+                    <View style={[styles.vitalBadge, { 
+                      backgroundColor: theme.colors.errorLight, 
+                      borderColor: theme.colors.error + '40' 
+                    }]}>
+                      <Ionicons name="pulse" size={12} color={theme.colors.error} />
+                      <Text style={[styles.vitalText, { color: theme.colors.error }]}>TA: {vitals.blood_pressure}</Text>
+                    </View>
+                  )}
+                  {vitals.temperature && (
+                    <View style={[styles.vitalBadge, { 
+                      backgroundColor: theme.colors.warningLight, 
+                      borderColor: theme.colors.warning + '40' 
+                    }]}>
+                      <Ionicons name="thermometer" size={12} color={theme.colors.warning} />
+                      <Text style={[styles.vitalText, { color: theme.colors.warning }]}>{vitals.temperature}°C</Text>
+                    </View>
+                  )}
+                  {vitals.heart_rate && (
+                    <View style={[styles.vitalBadge, { 
+                      backgroundColor: theme.colors.errorLight, 
+                      borderColor: theme.colors.error + '40' 
+                    }]}>
+                      <Ionicons name="heart" size={12} color={theme.colors.error} />
+                      <Text style={[styles.vitalText, { color: theme.colors.error }]}>{vitals.heart_rate} bpm</Text>
+                    </View>
+                  )}
+                  {vitals.spo2 && (
+                    <View style={[styles.vitalBadge, { 
+                      backgroundColor: theme.colors.primaryLight, 
+                      borderColor: theme.colors.primary + '40' 
+                    }]}>
+                      <Ionicons name="water" size={12} color={theme.colors.primary} />
+                      <Text style={[styles.vitalText, { color: theme.colors.primary }]}>SpO₂: {vitals.spo2}%</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Médications */}
+              {hasMedications && (
+                <View style={[styles.medicationsRow, { 
+                  backgroundColor: theme.colors.primaryLight,
+                  borderColor: theme.colors.primary + '40',
+                }]}>
+                  <Ionicons name="medical" size={13} color={theme.colors.primary} />
+                  <Text style={[styles.medicationsText, { color: theme.colors.primary }]} numberOfLines={1}>
+                    {medications.length === 1 
+                      ? medications[0]
+                      : `${medications.length} médicament${medications.length > 1 ? 's' : ''}`
+                    }
+                  </Text>
+                </View>
+              )}
+
+              {/* Diagnostic/Évaluation */}
+              {hasAssessment && (
+                <View style={[styles.assessmentRow, { 
+                  backgroundColor: theme.colors.backgroundSecondary,
+                  borderColor: theme.colors.border,
+                }]}>
+                  <Ionicons name="clipboard" size={12} color={theme.colors.textSecondary} />
+                  <Text style={[styles.assessmentText, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                    {assessment.length > 80 ? `${assessment.substring(0, 80)}...` : assessment}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Statistiques des rapports */}
+          {reportsCount > 0 && (
+            <View style={[styles.statsRow, { borderTopColor: theme.colors.border }]}>
+              <View style={styles.infoItem}>
+                <Ionicons name="document-text" size={13} color={theme.colors.primary} />
+                <Text style={[styles.statsText, { color: theme.colors.primary }]}>
+                  {reportsCount} {reportsCount === 1 ? 'rapport' : 'rapports'}
+                </Text>
+              </View>
+              {lastReportDate && (
+                <View style={styles.infoItem}>
+                  <Ionicons name="time" size={13} color={theme.colors.textSecondary} />
+                  <Text style={[styles.statsSecondaryText, { color: theme.colors.textSecondary }]}>
+                    Dernier: {formatRelativeDate(lastReportDate)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Date de création si disponible */}
+          {hasCreatedAt && (
+            <View style={[styles.metaInfoRow, { borderTopColor: theme.colors.border }]}>
+              <Ionicons name="person-add-outline" size={11} color={theme.colors.textMuted} />
+              <Text style={[styles.metaInfoText, { color: theme.colors.textMuted }]}>
+                Ajouté {formatRelativeDate(patient.created_at)}
+              </Text>
+            </View>
+          )}
+
+          {/* Message si aucune info */}
+          {infoCount === 0 && (
+            <Text style={[styles.noInfoText, { color: theme.colors.textMuted }]}>Aucune information disponible</Text>
           )}
         </View>
 
         {/* Icône flèche */}
         <View style={styles.arrowContainer}>
-          <Ionicons name="chevron-forward" size={20} color={MEDICAL_COLORS.icon} />
+          <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -399,95 +694,102 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index }: P
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MEDICAL_COLORS.background,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+  safeAreaBottom: {
     backgroundColor: 'transparent',
   },
+  // Header moderne et élégant
+  headerContainer: {
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    borderBottomWidth: 1,
+    // paddingTop, backgroundColor et borderBottomColor appliqués dynamiquement
+  },
+  headerTop: {
+    marginBottom: Spacing.lg,
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  headerIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // backgroundColor appliqué dynamiquement
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    color: MEDICAL_COLORS.text,
     letterSpacing: -0.5,
-    marginBottom: 4,
+    marginBottom: Spacing.xs / 2,
+    // color appliqué dynamiquement
   },
   subtitle: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: MEDICAL_COLORS.textMuted,
-    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '500',
+    // color appliqué dynamiquement
   },
+  // Barre de recherche premium
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: MEDICAL_COLORS.card,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    marginBottom: Spacing.md,
+    // backgroundColor et borderColor appliqués dynamiquement
   },
-  searchIcon: {
-    marginRight: 12,
+  searchIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+    // backgroundColor appliqué dynamiquement
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: MEDICAL_COLORS.text,
-    padding: 0,
+    fontSize: 16,
+    fontWeight: '400',
+    // color appliqué dynamiquement
   },
   clearButton: {
-    marginLeft: 8,
-    padding: 4,
+    marginLeft: Spacing.sm,
+    padding: Spacing.xs,
   },
+  // Filtres de tri modernes
   sortContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  sortLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: MEDICAL_COLORS.textSecondary,
+    marginTop: Spacing.xs,
   },
   sortButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing.sm,
   },
   sortButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: MEDICAL_COLORS.card,
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
-    gap: 6,
-  },
-  sortButtonActive: {
-    backgroundColor: MEDICAL_COLORS.primary,
-    borderColor: MEDICAL_COLORS.primary,
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   sortButtonText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: MEDICAL_COLORS.textSecondary,
-  },
-  sortButtonTextActive: {
-    color: MEDICAL_COLORS.card,
+    fontSize: 14,
+    fontWeight: '600',
+    // color appliqué dynamiquement
   },
   loadingContainer: {
     flex: 1,
@@ -497,7 +799,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 15,
-    color: MEDICAL_COLORS.textMuted,
   },
   emptyContainer: {
     flex: 1,
@@ -509,7 +810,6 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: MEDICAL_COLORS.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -517,13 +817,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: MEDICAL_COLORS.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
     fontSize: 15,
-    color: MEDICAL_COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -539,76 +837,175 @@ const styles = StyleSheet.create({
   },
   patientCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: MEDICAL_COLORS.card,
+    alignItems: 'flex-start',
     borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    padding: 18,
     borderWidth: 1,
-    borderColor: MEDICAL_COLORS.border,
-    minHeight: 80, // Hauteur augmentée pour afficher plus d'infos
+    minHeight: 140, // Hauteur augmentée pour afficher les détails médicaux
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   avatarContainer: {
-    marginRight: 12,
+    marginRight: 14,
+    paddingTop: 2, // Alignement avec le nom
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    // Pas d'ombre, design épuré
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: MEDICAL_COLORS.card,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   cardContent: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     marginLeft: 4,
+    paddingTop: 2,
   },
   patientName: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
-    color: MEDICAL_COLORS.text,
-    marginBottom: 8,
-    letterSpacing: -0.2,
+    marginBottom: 10,
+    letterSpacing: -0.3,
+    lineHeight: 24,
   },
-  infoBadges: {
+  // Ligne principale d'informations (âge, genre)
+  mainInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 8,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  // Ligne secondaire (chambre, unité)
+  secondaryInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 6,
+  },
+  secondaryInfoText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // Conteneur des détails médicaux
+  medicalDetailsContainer: {
+    marginTop: 10,
+    marginBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    gap: 8,
+    // borderTopColor appliqué dynamiquement
+  },
+  // Signes vitaux
+  vitalsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     alignItems: 'center',
   },
-  badge: {
+  vitalBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: MEDICAL_COLORS.background,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
     gap: 4,
-    maxWidth: 120,
+    borderWidth: 1,
+    // backgroundColor, borderColor et color appliqués dynamiquement
   },
-  badgeText: {
+  vitalText: {
+    fontSize: 11,
+    fontWeight: '600',
+    // color appliqué dynamiquement
+  },
+  // Médications
+  medicationsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E8F1FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D0E5FF',
+  },
+  medicationsText: {
     fontSize: 12,
     fontWeight: '500',
-    color: MEDICAL_COLORS.textSecondary,
+    flex: 1,
   },
-  patientSubLabel: {
+  // Diagnostic/Évaluation
+  assessmentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#F5F5F7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    // borderColor appliqué dynamiquement
+  },
+  assessmentText: {
+    fontSize: 11,
+    fontWeight: '400',
+    flex: 1,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
+  // Ligne statistiques (rapports)
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 6,
+    marginBottom: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    // borderTopColor appliqué dynamiquement
+  },
+  statsText: {
     fontSize: 13,
-    color: MEDICAL_COLORS.textMuted,
+    fontWeight: '600',
+  },
+  statsSecondaryText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Ligne meta (date de création)
+  metaInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    // borderTopColor appliqué dynamiquement
+  },
+  metaInfoText: {
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  noInfoText: {
+    fontSize: 13,
     fontWeight: '400',
     fontStyle: 'italic',
     marginTop: 4,

@@ -23,6 +23,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AudioPlayer from '@/components/AudioPlayer';
 import { reportApiService, StructuredJson, SOAPIEStructure } from '@/services/reportApi';
 import { uploadApiService } from '@/services/uploadApi';
+import ModernHeader from '@/components/ModernHeader';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface SOAPIESection {
   key: keyof SOAPIEStructure;
@@ -75,6 +77,7 @@ const SOAPIE_SECTIONS: SOAPIESection[] = [
 export default function ReportEditScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { theme } = useTheme();
 
   const audioUri = params.audioUri as string;
   const patientId = params.patientId as string;
@@ -570,79 +573,106 @@ export default function ReportEditScreen() {
       const vitals = objective?.vitals || {};
       
       return (
-        <View key={section.key} style={styles.sectionCard}>
+        <View key={section.key} style={[styles.sectionCard, { 
+          backgroundColor: theme.colors.backgroundCard,
+          borderColor: theme.colors.borderCard,
+        }]}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <Ionicons name={section.icon} size={20} color="#006CFF" />
-              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Ionicons name={section.icon} size={20} color={theme.colors.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{section.title}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
           </View>
 
           {/* Signes vitaux */}
           <View style={styles.subSection}>
-            <Text style={styles.subSectionLabel}>Signes vitaux</Text>
+            <Text style={[styles.subSectionLabel, { color: theme.colors.textSecondary }]}>Signes vitaux</Text>
             <View style={styles.vitalsGrid}>
               <View style={styles.vitalRow}>
-                <Text style={styles.vitalLabel}>Température (°C)</Text>
+                <Text style={[styles.vitalLabel, { color: theme.colors.text }]}>Température (°C)</Text>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={[styles.vitalInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="37.5"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={vitals.temperature || ''}
                   onChangeText={(text) => updateVitalField('temperature', text)}
                   keyboardType="decimal-pad"
                 />
               </View>
               <View style={styles.vitalRow}>
-                <Text style={styles.vitalLabel}>Tension artérielle</Text>
+                <Text style={[styles.vitalLabel, { color: theme.colors.text }]}>Tension artérielle</Text>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={[styles.vitalInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="120/80"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={vitals.blood_pressure || ''}
                   onChangeText={(text) => updateVitalField('blood_pressure', text)}
                 />
               </View>
               <View style={styles.vitalRow}>
-                <Text style={styles.vitalLabel}>Fréquence cardiaque (bpm)</Text>
+                <Text style={[styles.vitalLabel, { color: theme.colors.text }]}>Fréquence cardiaque (bpm)</Text>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={[styles.vitalInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="72"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={vitals.heart_rate || ''}
                   onChangeText={(text) => updateVitalField('heart_rate', text)}
                   keyboardType="numeric"
                 />
               </View>
               <View style={styles.vitalRow}>
-                <Text style={styles.vitalLabel}>Respiration (/min)</Text>
+                <Text style={[styles.vitalLabel, { color: theme.colors.text }]}>Respiration (/min)</Text>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={[styles.vitalInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="16"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={vitals.respiratory_rate || ''}
                   onChangeText={(text) => updateVitalField('respiratory_rate', text)}
                   keyboardType="numeric"
                 />
               </View>
               <View style={styles.vitalRow}>
-                <Text style={styles.vitalLabel}>SpO₂ (%)</Text>
+                <Text style={[styles.vitalLabel, { color: theme.colors.text }]}>SpO₂ (%)</Text>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={[styles.vitalInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="98"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={vitals.spo2 || ''}
                   onChangeText={(text) => updateVitalField('spo2', text)}
                   keyboardType="numeric"
                 />
               </View>
               <View style={styles.vitalRow}>
-                <Text style={styles.vitalLabel}>Glycémie (g/L)</Text>
+                <Text style={[styles.vitalLabel, { color: theme.colors.text }]}>Glycémie (g/L)</Text>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={[styles.vitalInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="1.0"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={vitals.glycemia || ''}
                   onChangeText={(text) => updateVitalField('glycemia', text)}
                   keyboardType="decimal-pad"
@@ -653,11 +683,15 @@ export default function ReportEditScreen() {
 
           {/* Examen clinique */}
           <View style={styles.subSection}>
-            <Text style={styles.subSectionLabel}>Examen clinique</Text>
+            <Text style={[styles.subSectionLabel, { color: theme.colors.textSecondary }]}>Examen clinique</Text>
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, {
+                backgroundColor: theme.colors.backgroundSecondary,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              }]}
               placeholder="Décrivez l'examen clinique..."
-              placeholderTextColor="#C7C7CC"
+              placeholderTextColor={theme.colors.textMuted}
               value={objective?.exam || ''}
               onChangeText={(text) => updateObjectiveField('exam', text)}
               multiline
@@ -667,11 +701,15 @@ export default function ReportEditScreen() {
 
           {/* Laboratoires */}
           <View style={styles.subSection}>
-            <Text style={styles.subSectionLabel}>Résultats de laboratoire</Text>
+            <Text style={[styles.subSectionLabel, { color: theme.colors.textSecondary }]}>Résultats de laboratoire</Text>
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, {
+                backgroundColor: theme.colors.backgroundSecondary,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              }]}
               placeholder="Résultats de laboratoire..."
-              placeholderTextColor="#C7C7CC"
+              placeholderTextColor={theme.colors.textMuted}
               value={objective?.labs || ''}
               onChangeText={(text) => updateObjectiveField('labs', text)}
               multiline
@@ -681,11 +719,15 @@ export default function ReportEditScreen() {
 
           {/* Médicaments */}
           <View style={styles.subSection}>
-            <Text style={styles.subSectionLabel}>Médicaments</Text>
+            <Text style={[styles.subSectionLabel, { color: theme.colors.textSecondary }]}>Médicaments</Text>
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, {
+                backgroundColor: theme.colors.backgroundSecondary,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              }]}
               placeholder="Liste des médicaments (un par ligne)..."
-              placeholderTextColor="#C7C7CC"
+              placeholderTextColor={theme.colors.textMuted}
               value={Array.isArray(objective?.medications) ? objective.medications.join('\n') : (objective?.medications || '')}
               onChangeText={(text) => {
                 const medications = text.split('\n').filter((m) => m.trim());
@@ -700,19 +742,26 @@ export default function ReportEditScreen() {
     }
 
     return (
-      <View key={section.key} style={styles.sectionCard}>
+      <View key={section.key} style={[styles.sectionCard, { 
+        backgroundColor: theme.colors.backgroundCard,
+        borderColor: theme.colors.borderCard,
+      }]}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderLeft}>
-            <Ionicons name={section.icon} size={20} color="#006CFF" />
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Ionicons name={section.icon} size={20} color={theme.colors.primary} />
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{section.title}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
         </View>
 
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, {
+            backgroundColor: theme.colors.backgroundSecondary,
+            borderColor: theme.colors.border,
+            color: theme.colors.text,
+          }]}
           placeholder={section.placeholder}
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={theme.colors.textMuted}
           value={displayValue}
           onChangeText={(text) => {
             if (section.key === 'I') {
@@ -731,29 +780,18 @@ export default function ReportEditScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar style="auto" />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* Header Premium */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Édition du Rapport</Text>
-          <TouchableOpacity
-            style={styles.editIconButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="document-text-outline" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
-        </View>
+        {/* Header moderne */}
+        <ModernHeader
+          title="Édition du Rapport"
+          subtitle="Modification des sections SOAPIE"
+          icon="create"
+        />
 
         <ScrollView
           style={styles.scrollView}
@@ -767,9 +805,12 @@ export default function ReportEditScreen() {
 
           {/* Indicateur de chargement initial */}
           {isUploading && !isStructuringComplete && (
-            <View style={styles.loadingCard}>
-              <ActivityIndicator size="large" color="#006CFF" />
-              <Text style={styles.loadingText}>
+            <View style={[styles.loadingCard, {
+              backgroundColor: theme.colors.backgroundCard,
+              borderColor: theme.colors.borderCard,
+            }]}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
                 Traitement de l&apos;audio et structuration des données...
               </Text>
             </View>
@@ -777,44 +818,60 @@ export default function ReportEditScreen() {
 
           {/* Indicateur de structuration terminée */}
           {isStructuringComplete && !isUploading && (
-            <View style={styles.successCard}>
-              <Ionicons name="checkmark-circle" size={32} color="#34C759" />
-              <Text style={styles.successText}>
+            <View style={[styles.successCard, {
+              backgroundColor: theme.resolved === 'dark' ? theme.colors.successLight : '#E8F5E9',
+              borderColor: theme.colors.success,
+            }]}>
+              <Ionicons name="checkmark-circle" size={32} color={theme.colors.success} />
+              <Text style={[styles.successText, { 
+                color: theme.resolved === 'dark' ? theme.colors.success : '#1B5E20' 
+              }]}>
                 Structuration terminée
               </Text>
-              <Text style={styles.successSubtext}>
+              <Text style={[styles.successSubtext, { color: theme.colors.textSecondary }]}>
                 Vous pouvez maintenant modifier les données ci-dessous
               </Text>
             </View>
           )}
 
           {/* Section Informations Patient */}
-          <View style={styles.patientCard}>
+          <View style={[styles.patientCard, {
+            backgroundColor: theme.colors.backgroundCard,
+            borderColor: theme.colors.borderCard,
+          }]}>
             <View style={styles.patientCardHeader}>
-              <Ionicons name="person-circle-outline" size={20} color="#006CFF" />
-              <Text style={styles.patientCardTitle}>Informations du Patient</Text>
+              <Ionicons name="person-circle-outline" size={20} color={theme.colors.primary} />
+              <Text style={[styles.patientCardTitle, { color: theme.colors.text }]}>Informations du Patient</Text>
             </View>
             
             <View style={styles.patientInfoGrid}>
               {/* Nom complet */}
-              <View style={styles.patientInfoRow}>
-                <Text style={styles.patientInfoLabel}>Nom complet :</Text>
+              <View style={[styles.patientInfoRow, { borderBottomColor: theme.colors.border }]}>
+                <Text style={[styles.patientInfoLabel, { color: theme.colors.textSecondary }]}>Nom complet :</Text>
                 <TextInput
-                  style={styles.patientInfoInput}
+                  style={[styles.patientInfoInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="Nom complet du patient"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={structuredJson.patient?.full_name || patientData?.full_name || ''}
                   onChangeText={(text) => updatePatientField('full_name', text)}
                 />
               </View>
 
               {/* Âge */}
-              <View style={styles.patientInfoRow}>
-                <Text style={styles.patientInfoLabel}>Âge :</Text>
+              <View style={[styles.patientInfoRow, { borderBottomColor: theme.colors.border }]}>
+                <Text style={[styles.patientInfoLabel, { color: theme.colors.textSecondary }]}>Âge :</Text>
                 <TextInput
-                  style={styles.patientInfoInput}
+                  style={[styles.patientInfoInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="Ex: 45 ans"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={structuredJson.patient?.age || patientData?.age || ''}
                   onChangeText={(text) => updatePatientField('age', text)}
                   keyboardType="numeric"
@@ -822,36 +879,48 @@ export default function ReportEditScreen() {
               </View>
 
               {/* Sexe */}
-              <View style={styles.patientInfoRow}>
-                <Text style={styles.patientInfoLabel}>Sexe :</Text>
+              <View style={[styles.patientInfoRow, { borderBottomColor: theme.colors.border }]}>
+                <Text style={[styles.patientInfoLabel, { color: theme.colors.textSecondary }]}>Sexe :</Text>
                 <TextInput
-                  style={styles.patientInfoInput}
+                  style={[styles.patientInfoInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="Ex: Homme, Femme"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={structuredJson.patient?.gender || patientData?.gender || ''}
                   onChangeText={(text) => updatePatientField('gender', text)}
                 />
               </View>
 
               {/* Chambre */}
-              <View style={styles.patientInfoRow}>
-                <Text style={styles.patientInfoLabel}>Chambre :</Text>
+              <View style={[styles.patientInfoRow, { borderBottomColor: theme.colors.border }]}>
+                <Text style={[styles.patientInfoLabel, { color: theme.colors.textSecondary }]}>Chambre :</Text>
                 <TextInput
-                  style={styles.patientInfoInput}
+                  style={[styles.patientInfoInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="Ex: 12, Chambre 5"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={structuredJson.patient?.room_number || patientData?.room_number || ''}
                   onChangeText={(text) => updatePatientField('room_number', text)}
                 />
               </View>
 
               {/* Unité / Service */}
-              <View style={styles.patientInfoRow}>
-                <Text style={styles.patientInfoLabel}>Unité / Service :</Text>
+              <View style={[styles.patientInfoRow, { borderBottomColor: theme.colors.border }]}>
+                <Text style={[styles.patientInfoLabel, { color: theme.colors.textSecondary }]}>Unité / Service :</Text>
                 <TextInput
-                  style={styles.patientInfoInput}
+                  style={[styles.patientInfoInput, {
+                    backgroundColor: theme.colors.backgroundSecondary,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }]}
                   placeholder="Ex: Cardiologie, Urgences"
-                  placeholderTextColor="#C7C7CC"
+                  placeholderTextColor={theme.colors.textMuted}
                   value={structuredJson.patient?.unit || patientData?.unit || ''}
                   onChangeText={(text) => updatePatientField('unit', text)}
                 />
@@ -864,7 +933,11 @@ export default function ReportEditScreen() {
 
           {/* Bouton CTA */}
           <TouchableOpacity
-            style={[styles.generateButton, isGenerating && styles.generateButtonDisabled]}
+            style={[
+              styles.generateButton, 
+              { backgroundColor: theme.colors.primary },
+              isGenerating && { backgroundColor: theme.colors.primary + '80' }
+            ]}
             onPress={handleGeneratePDF}
             disabled={isGenerating}
             activeOpacity={0.8}
@@ -893,7 +966,7 @@ export default function ReportEditScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    // backgroundColor appliqué dynamiquement
   },
   keyboardView: {
     flex: 1,
@@ -937,17 +1010,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   sectionCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -963,7 +1030,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1A1A1A',
+    // color appliqué dynamiquement
   },
   subSection: {
     marginTop: 16,
@@ -971,40 +1038,29 @@ const styles = StyleSheet.create({
   subSectionLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8E8E93',
     marginBottom: 8,
+    // color appliqué dynamiquement
   },
   textInput: {
-    backgroundColor: '#F7F7F7',
     borderRadius: 12,
     padding: 16,
     fontSize: 15,
-    color: '#1A1A1A',
     minHeight: 100,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    // backgroundColor, borderColor et color appliqués dynamiquement
   },
   generateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#006CFF',
     paddingVertical: 18,
     paddingHorizontal: 24,
     borderRadius: 16,
     marginTop: 8,
     marginBottom: 32,
     gap: 10,
-    shadowColor: '#006CFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  generateButtonDisabled: {
-    backgroundColor: '#A0CFFF',
-    shadowOpacity: 0.1,
+    // backgroundColor appliqué dynamiquement
   },
   generateButtonText: {
     color: '#FFFFFF',
@@ -1015,12 +1071,11 @@ const styles = StyleSheet.create({
     height: 40,
   },
   patientCard: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   patientCardHeader: {
     flexDirection: 'row',
@@ -1031,8 +1086,8 @@ const styles = StyleSheet.create({
   patientCardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
     letterSpacing: -0.3,
+    // color appliqué dynamiquement
   },
   patientInfoGrid: {
     gap: 12,
@@ -1043,13 +1098,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    // borderBottomColor appliqué dynamiquement
   },
   patientInfoLabel: {
     fontSize: 15,
-    color: '#8E8E93',
     fontWeight: '500',
     flex: 1,
+    // color appliqué dynamiquement
   },
   patientInfoValue: {
     fontSize: 15,
@@ -1060,54 +1115,50 @@ const styles = StyleSheet.create({
   },
   patientInfoInput: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
     fontSize: 15,
-    color: '#1A1A1A',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
     textAlign: 'right',
     minHeight: 40,
+    // backgroundColor, borderColor et color appliqués dynamiquement
   },
   loadingCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#8E8E93',
     textAlign: 'center',
+    // color appliqué dynamiquement
   },
   successCard: {
-    backgroundColor: '#E8F5E9',
     borderRadius: 16,
     padding: 24,
     marginBottom: 20,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#34C759',
+    // backgroundColor et borderColor appliqués dynamiquement
   },
   successText: {
     marginTop: 12,
     fontSize: 16,
     fontWeight: '600',
-    color: '#1B5E20',
     textAlign: 'center',
+    // color appliqué dynamiquement
   },
   successSubtext: {
     marginTop: 4,
     fontSize: 14,
-    color: '#4A4A4A',
     textAlign: 'center',
+    // color appliqué dynamiquement
   },
   vitalsGrid: {
     gap: 12,
@@ -1121,19 +1172,17 @@ const styles = StyleSheet.create({
   vitalLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1A1A1A',
     flex: 1,
     marginRight: 12,
+    // color appliqué dynamiquement
   },
   vitalInput: {
-    backgroundColor: '#F7F7F7',
     borderRadius: 8,
     padding: 12,
     fontSize: 15,
-    color: '#1A1A1A',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
     flex: 1,
     minWidth: 100,
+    // backgroundColor, borderColor et color appliqués dynamiquement
   },
 });
