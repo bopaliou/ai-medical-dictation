@@ -384,15 +384,15 @@ export default function RapportsScreen() {
       >
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.headerContent}>
-            <View>
+        <View>
               <Text style={[styles.title, { color: theme.colors.text }]}>Rapports</Text>
               <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Historique des notes et dictées</Text>
             </View>
             <View style={styles.headerStats}>
               <Text style={[styles.statsText, { color: theme.colors.textSecondary }]}>{filteredReports.length} rapport{filteredReports.length > 1 ? 's' : ''}</Text>
             </View>
-          </View>
         </View>
+      </View>
 
         {/* Barre de recherche premium avec glassmorphism */}
         <View style={styles.searchWrapper}>
@@ -403,16 +403,16 @@ export default function RapportsScreen() {
             <View style={[styles.searchIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
               <Ionicons name="search" size={20} color={theme.colors.primary} />
             </View>
-            <TextInput
+        <TextInput
               style={[styles.searchInput, { color: theme.colors.text }]}
-              placeholder="Rechercher par patient ou date..."
+          placeholder="Rechercher par patient ou date..."
               placeholderTextColor={theme.colors.textMuted}
-              value={searchTerm}
-              onChangeText={setSearchTerm}
+          value={searchTerm}
+          onChangeText={setSearchTerm}
               returnKeyType="search"
               clearButtonMode="never"
-            />
-            {searchTerm.length > 0 && (
+        />
+        {searchTerm.length > 0 && (
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -424,23 +424,23 @@ export default function RapportsScreen() {
                 <View style={[styles.clearButtonInner, { backgroundColor: theme.colors.backgroundSecondary }]}>
                   <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
                 </View>
-              </TouchableOpacity>
-            )}
+          </TouchableOpacity>
+        )}
           </View>
-        </View>
+      </View>
 
         {/* Chips de filtres premium avec animations */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filtersContainer}
-          contentContainerStyle={styles.filtersContent}
-        >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersContainer}
+        contentContainerStyle={styles.filtersContent}
+      >
           {filters.map((filter, index) => {
             const isActive = activeFilter === filter.key;
             return (
               <FilterChip
-                key={filter.key}
+            key={filter.key}
                 label={filter.label}
                 filterKey={filter.key}
                 isActive={isActive}
@@ -452,7 +452,7 @@ export default function RapportsScreen() {
               />
             );
           })}
-        </ScrollView>
+      </ScrollView>
       </LinearGradient>
 
       {/* Liste des rapports */}
@@ -488,15 +488,15 @@ export default function RapportsScreen() {
           }
         >
           {filteredReports.map((report, index) => (
-            <ReportCard
-              key={report.id}
-              report={report}
+              <ReportCard
+                key={report.id}
+                report={report}
               onPress={() => handleReportPress(report)}
               onShare={report.pdf_url ? () => handleSharePDF(report.pdf_url!) : undefined}
-              onMenu={() => showActionMenu(report)}
-              index={index}
+                onMenu={() => showActionMenu(report)}
+                index={index}
               showPatientName={true}
-            />
+              />
           ))}
         </ScrollView>
       )}

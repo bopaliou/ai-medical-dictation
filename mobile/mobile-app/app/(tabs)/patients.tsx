@@ -218,7 +218,7 @@ export default function PatientsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
-
+      
       {/* Header moderne et élégant avec recherche et filtres intégrés */}
       <View style={[styles.headerContainer, { 
         backgroundColor: theme.colors.backgroundCard, 
@@ -233,15 +233,15 @@ export default function PatientsScreen() {
             </View>
             <View style={styles.headerTextContainer}>
               <Text style={[styles.title, { color: theme.colors.text }]}>Patients</Text>
-              {!isLoading && (
+        {!isLoading && (
                 <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-                  {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
-                  {searchTerm && ` trouvé${filteredPatients.length > 1 ? 's' : ''}`}
-                </Text>
-              )}
+            {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
+            {searchTerm && ` trouvé${filteredPatients.length > 1 ? 's' : ''}`}
+          </Text>
+        )}
             </View>
           </View>
-        </View>
+      </View>
 
         {/* Barre de recherche premium */}
         <View style={[styles.searchContainer, { 
@@ -251,31 +251,31 @@ export default function PatientsScreen() {
           <View style={[styles.searchIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
             <Ionicons name="search" size={18} color={theme.colors.primary} />
           </View>
-          <TextInput
+        <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
             placeholder="Rechercher un patient..."
             placeholderTextColor={theme.colors.textMuted}
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-          />
-          {searchTerm.length > 0 && (
-            <TouchableOpacity 
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
+        {searchTerm.length > 0 && (
+          <TouchableOpacity 
               onPress={() => {
                 setSearchTerm('');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }} 
-              style={styles.clearButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
+            style={styles.clearButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
               <Ionicons name="close-circle" size={20} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
+          </TouchableOpacity>
+        )}
+      </View>
 
         {/* Filtres de tri modernes */}
-        <View style={styles.sortContainer}>
-          <View style={styles.sortButtons}>
-            <TouchableOpacity
+      <View style={styles.sortContainer}>
+        <View style={styles.sortButtons}>
+          <TouchableOpacity
               style={[
                 styles.sortButton, 
                 { 
@@ -291,21 +291,21 @@ export default function PatientsScreen() {
                 setSortType('alphabetical');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-              activeOpacity={0.7}
-            >
-              <Ionicons 
+            activeOpacity={0.7}
+          >
+            <Ionicons 
                 name={sortType === 'alphabetical' ? 'text' : 'text-outline'} 
-                size={16} 
+              size={16} 
                 color={sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textMuted} 
-              />
+            />
               <Text style={[
                 styles.sortButtonText, 
                 { color: sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textSecondary }
               ]}>
-                Alphabétique
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              Alphabétique
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
               style={[
                 styles.sortButton, 
                 { 
@@ -321,20 +321,20 @@ export default function PatientsScreen() {
                 setSortType('recent');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-              activeOpacity={0.7}
-            >
-              <Ionicons 
+            activeOpacity={0.7}
+          >
+            <Ionicons 
                 name={sortType === 'recent' ? 'time' : 'time-outline'} 
-                size={16} 
+              size={16} 
                 color={sortType === 'recent' ? '#FFFFFF' : theme.colors.textMuted} 
-              />
+            />
               <Text style={[
                 styles.sortButtonText, 
                 { color: sortType === 'recent' ? '#FFFFFF' : theme.colors.textSecondary }
               ]}>
-                Récents
-              </Text>
-            </TouchableOpacity>
+              Récents
+            </Text>
+          </TouchableOpacity>
           </View>
         </View>
       </View>

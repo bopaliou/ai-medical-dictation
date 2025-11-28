@@ -45,24 +45,24 @@ function RootLayoutNav() {
       }
       
       // Si on est sur le login alors qu'on est authentifié, rediriger vers l'app
-      if (inLogin) {
-        const timeoutId = setTimeout(() => {
-          if (segments[0] === 'login') {
-            router.replace('/(tabs)');
-          }
-        }, 1000);
-        return () => clearTimeout(timeoutId);
+        if (inLogin) {
+          const timeoutId = setTimeout(() => {
+            if (segments[0] === 'login') {
+              router.replace('/(tabs)');
+            }
+          }, 1000);
+          return () => clearTimeout(timeoutId);
+        }
+        
+        // Ne pas rediriger si on est sur une route autorisée (record, settings, etc.)
+        if (!inTabs && !isAllowedRoute) {
+          router.replace('/(tabs)');
+        }
+        return;
       }
-      
-      // Ne pas rediriger si on est sur une route autorisée (record, settings, etc.)
-      if (!inTabs && !isAllowedRoute) {
-        router.replace('/(tabs)');
-      }
-      return;
-    }
 
     // PRIORITÉ 2: Si l'utilisateur n'est pas authentifié, vérifier l'onboarding
-    if (isAuthenticated === false) {
+      if (isAuthenticated === false) {
       // Si l'utilisateur n'a pas vu l'onboarding, l'afficher
       if (!hasSeenOnboarding) {
         if (!inOnboarding) {
@@ -89,7 +89,7 @@ function RootLayoutNav() {
         if (inLogin) return;
         
         // Sinon, rediriger vers login
-        router.replace('/login');
+          router.replace('/login');
         return;
       }
     }

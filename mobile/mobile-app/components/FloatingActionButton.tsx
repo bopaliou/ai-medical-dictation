@@ -60,10 +60,16 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
     // Feedback haptique
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // Arrêter toute animation en cours sur scaleAnim avant d'en démarrer une nouvelle
+    scaleAnim.stopAnimation();
+    // Réinitialiser la valeur à 1 avant de démarrer la nouvelle animation
+    scaleAnim.setValue(1);
+    
     // Animation swell premium : scale 1 → 1.08 → 1
     swell(scaleAnim, 1.08, ANIMATION_DURATION.FAB).start();
     
     // Animation de l'ombre (subtile)
+    shadowOpacityAnim.stopAnimation();
     Animated.sequence([
       Animated.timing(shadowOpacityAnim, {
         toValue: 0.5,

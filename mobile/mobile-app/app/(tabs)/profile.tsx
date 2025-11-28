@@ -144,20 +144,20 @@ export default function ProfileScreen() {
         },
       ]}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
-        <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
-        
-        {/* Header simple */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Mon profil</Text>
-        </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+      
+      {/* Header simple */}
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>Mon profil</Text>
+      </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* User Profile Card */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* User Profile Card */}
           <View style={[styles.userProfileCard, { 
             backgroundColor: theme.colors.backgroundCard,
             borderColor: theme.colors.borderCard,
@@ -172,11 +172,11 @@ export default function ProfileScreen() {
                 },
               ]}
             >
-              <Ionicons name="person" size={36} color={theme.colors.primary} />
+            <Ionicons name="person" size={36} color={theme.colors.primary} />
             </Animated.View>
-            <Text style={[styles.userName, { color: theme.colors.text }]}>{user?.full_name || 'Utilisateur'}</Text>
-            <Text style={[styles.userRole, { color: theme.colors.textSecondary }]}>{getRoleLabel()}</Text>
-          </View>
+          <Text style={[styles.userName, { color: theme.colors.text }]}>{user?.full_name || 'Utilisateur'}</Text>
+          <Text style={[styles.userRole, { color: theme.colors.textSecondary }]}>{getRoleLabel()}</Text>
+        </View>
 
         {/* Settings Cards */}
         {settingsSections.map((section, sectionIndex) => (

@@ -46,7 +46,7 @@ function AnimatedTabIcon({
         Animated.timing(opacityAnim, {
           toValue: theme.resolved === 'dark' ? 0.75 : 0.6, // Plus clair en dark mode
           duration: ANIMATION_DURATION.TAB_BAR,
-          useNativeDriver: true,
+      useNativeDriver: true,
         }),
       ]).start();
     }
