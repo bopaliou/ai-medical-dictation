@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApiService } from '@/services/authApi';
@@ -129,10 +130,14 @@ export default function LoginScreen() {
           ]}
         >
           <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="medical" size={48} color="#007AFF" />
+            <View style={styles.logoContainer}>
+              <Image 
+                source={require('@/assets/images/logo-kadducare.png')} 
+                style={styles.logo}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.title}>Connexion</Text>
+            <Text style={styles.title}>KadduCare</Text>
             <Text style={styles.subtitle}>Accédez à votre espace infirmier</Text>
           </View>
 
@@ -257,14 +262,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
-  iconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#E3F2FD',
+  logoContainer: {
+    width: 120,
+    height: 120,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
   },
   title: {
     fontSize: 34,

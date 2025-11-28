@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +33,7 @@ import NetworkErrorBanner from '@/components/NetworkErrorBanner';
 import ReportCard from '@/components/ReportCard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
+import AppHeader from '@/components/AppHeader';
 
 // Composant Mini-Card pour les statistiques récentes
 interface StatMiniCardProps {
@@ -957,6 +959,9 @@ export default function DashboardScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
         <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
         
+        {/* Header KadduCare - Fixe en haut */}
+        <AppHeader />
+        
         {/* Bannière d'erreur réseau élégante */}
         <NetworkErrorBanner
           message={networkError || ''}
@@ -973,16 +978,26 @@ export default function DashboardScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header premium avec avatar */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.greeting, { color: theme.colors.text }]}>
-              {firstName ? `Bonjour, ${firstName}` : 'Bienvenue'}
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>Voici vos dernières activités</Text>
-          </View>
-          <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryLight }]}>
-            <Ionicons name="person" size={28} color={theme.colors.primary} />
+
+        {/* Header avec message de bienvenue - Design premium */}
+        <View style={[styles.welcomeSection, { 
+          backgroundColor: theme.colors.background,
+        }]}>
+          <View style={styles.welcomeContent}>
+            <View style={styles.welcomeTextContainer}>
+              <Text style={[styles.greeting, { color: theme.colors.text }]}>
+                {firstName ? `Bonjour, ${firstName}` : 'Bienvenue'}
+              </Text>
+              <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
+                Voici vos dernières activités
+              </Text>
+            </View>
+            <View style={[styles.avatarContainer, { 
+              backgroundColor: theme.colors.primaryLight,
+              ...Shadows.md,
+            }]}>
+              <Ionicons name="person" size={28} color={theme.colors.primary} />
+            </View>
           </View>
         </View>
 
@@ -1159,21 +1174,25 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     paddingBottom: 140, // Espace pour le FAB
   },
-  // Header premium
-  header: {
+  // Section de bienvenue premium
+  welcomeSection: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingVertical: Spacing.xl,
+    marginBottom: Spacing.section,
+  },
+  welcomeContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.xxl,
-    marginTop: Spacing.md,
+    alignItems: 'center',
   },
-  headerLeft: {
+  welcomeTextContainer: {
     flex: 1,
   },
   greeting: {
-    fontSize: 28,
-    fontWeight: '600',
-    letterSpacing: -0.5,
+    ...Typography.h1,
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.8,
     marginBottom: Spacing.xs,
   },
   subtitle: {
@@ -1214,13 +1233,15 @@ const styles = StyleSheet.create({
   },
   // Section Statistiques récentes premium - Design épuré
   recentStatsSection: {
-    borderRadius: 18,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    marginHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.card,
+    padding: Spacing.cardPadding,
+    marginBottom: Spacing.section,
+    marginHorizontal: Spacing.screenPadding,
     borderWidth: 1,
     overflow: 'hidden',
-    // backgroundColor et borderColor appliqués dynamiquement
+    ...Shadows.card,
+    backgroundColor: '#FFFFFF',
+    // borderColor appliqué dynamiquement
   },
   recentStatsHeader: {
     marginBottom: Spacing.sm,
@@ -1269,11 +1290,13 @@ const styles = StyleSheet.create({
   },
   statMiniCard: {
     flex: 1,
-    borderRadius: 14,
-    padding: Spacing.xs + 4,
+    borderRadius: BorderRadius.card,
+    padding: Spacing.lg,
     borderWidth: 1,
-    minHeight: 65,
-    // backgroundColor et borderColor appliqués dynamiquement
+    minHeight: 120,
+    ...Shadows.md,
+    backgroundColor: '#FFFFFF',
+    // borderColor appliqué dynamiquement
   },
   statMiniCardContent: {
     alignItems: 'center',

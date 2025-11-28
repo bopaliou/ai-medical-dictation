@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,6 +30,8 @@ import ReportCard from '@/components/ReportCard';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
+import { Spacing, BorderRadius, Shadows } from '@/constants/design';
+import AppHeader from '@/components/AppHeader';
 
 type FilterType = 'all' | 'final' | 'draft' | 'trash';
 
@@ -373,6 +376,9 @@ export default function RapportsScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
 
+      {/* Header KadduCare */}
+      <AppHeader />
+
       {/* Header moderne avec gradient - Edge-to-edge */}
       <LinearGradient
         colors={theme.resolved === 'dark' 
@@ -382,9 +388,9 @@ export default function RapportsScreen() {
         end={{ x: 0, y: 1 }}
         style={[styles.headerGradient, { borderBottomColor: theme.colors.border }]}
       >
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={[styles.header, { paddingTop: Spacing.lg }]}>
           <View style={styles.headerContent}>
-        <View>
+            <View>
               <Text style={[styles.title, { color: theme.colors.text }]}>Rapports</Text>
               <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Historique des notes et dictées</Text>
             </View>
@@ -535,6 +541,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.lg,
   },
   title: {
     fontSize: 34,

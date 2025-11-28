@@ -4,12 +4,13 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
+import AppHeader from './AppHeader';
 
 interface ModernHeaderProps {
   title: string;
@@ -46,42 +47,48 @@ export default function ModernHeader({
   };
 
   return (
-    <LinearGradient
-      colors={theme.resolved === 'dark' 
-        ? [theme.colors.backgroundElevated, theme.colors.backgroundCard]
-        : [theme.colors.primaryLight, theme.colors.backgroundCard]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-      style={[styles.headerGradient, { paddingTop: insets.top }]}
-    >
-      <View style={styles.header}>
-        {showBackButton ? (
-          <TouchableOpacity
-            style={styles.backButtonHeader}
-            onPress={handleBackPress}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <View style={[styles.backButtonCircle, { backgroundColor: theme.colors.backgroundCard }]}>
-              <Ionicons name="arrow-back" size={20} color={theme.colors.primary} />
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.backButtonHeader} />
-        )}
+    <>
+      {/* Header KadduCare */}
+      <AppHeader compact />
 
-        <View style={styles.headerTitleContainer}>
-          <View style={[styles.headerIconContainer, { backgroundColor: theme.colors.primary }]}>
-            <Ionicons name={icon} size={16} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
-            {title}
-          </Text>
-          {subtitle && (
-            <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
+      <LinearGradient
+        colors={theme.resolved === 'dark' 
+          ? [theme.colors.backgroundElevated, theme.colors.backgroundCard]
+          : [theme.colors.primaryLight, theme.colors.backgroundCard]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[styles.headerGradient]}
+      >
+        <View style={styles.header}>
+          {showBackButton ? (
+            <TouchableOpacity
+              style={styles.backButtonHeader}
+              onPress={handleBackPress}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <View style={[styles.backButtonCircle, { backgroundColor: theme.colors.backgroundCard }]}>
+                <Ionicons name="arrow-back" size={20} color={theme.colors.primary} />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.backButtonHeader} />
           )}
-        </View>
+
+          <View style={styles.headerTitleContainer}>
+            <View style={[styles.headerIconContainer, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name={icon} size={16} color="#FFFFFF" />
+            </View>
+            <View style={styles.headerTextWrapper}>
+              <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {title}
+              </Text>
+              {subtitle && (
+                <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              )}
+            </View>
+          </View>
 
         {rightButton ? (
           <TouchableOpacity
@@ -108,10 +115,39 @@ export default function ModernHeader({
         )}
       </View>
     </LinearGradient>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  // Header app avec logo KadduCare
+  appHeader: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    // backgroundColor et borderBottomColor appliqués dynamiquement
+  },
+  appHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  appLogoContainer: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  appName: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    // color appliqué dynamiquement
+  },
   headerGradient: {
     paddingBottom: 20,
     marginBottom: 8,
@@ -144,7 +180,14 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     marginHorizontal: 12,
+    gap: 10,
+    overflow: 'hidden',
+  },
+  headerTextWrapper: {
+    flex: 1,
     alignItems: 'flex-start',
     overflow: 'hidden',
   },

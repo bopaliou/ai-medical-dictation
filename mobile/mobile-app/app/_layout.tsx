@@ -1,13 +1,18 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import * as SplashScreenNative from 'expo-splash-screen';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import SplashScreen from '@/components/SplashScreen';
+
+// Empêcher le splash screen natif de se masquer automatiquement
+SplashScreenNative.preventAutoHideAsync();
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -19,9 +24,33 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashFinished, setSplashFinished] = useState(false);
+
+  // Masquer le splash screen natif IMMÉDIATEMENT au montage
+  useEffect(() => {
+    // Masquer le splash natif le plus rapidement possible
+    // Ne pas attendre, masquer immédiatement pour afficher notre splash React
+    SplashScreenNative.hideAsync().catch(() => {
+      // Ignorer les erreurs silencieusement
+    });
+  }, []);
+
+  // Gérer l'affichage du splash screen React uniquement au démarrage
+  useEffect(() => {
+    if (splashFinished) return;
+    
+    // Le splash React s'affiche pendant 2.5 secondes puis disparaît
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+      setSplashFinished(true);
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [splashFinished]);
 
   useEffect(() => {
-    if (onboardingLoading || authLoading || isAuthenticated === null) return;
+    if (onboardingLoading || authLoading || isAuthenticated === null || !splashFinished) return;
 
     const inOnboarding = segments[0] === 'onboarding';
     const inLogin = segments[0] === 'login';
@@ -62,17 +91,9 @@ function RootLayoutNav() {
       }
 
     // PRIORITÉ 2: Si l'utilisateur n'est pas authentifié, vérifier l'onboarding
-      if (isAuthenticated === false) {
-      // Si l'utilisateur n'a pas vu l'onboarding, l'afficher
-      if (!hasSeenOnboarding) {
-        if (!inOnboarding) {
-          router.replace('/onboarding');
-        }
-        return;
-      }
-
+    if (isAuthenticated === false) {
       // Si l'utilisateur a vu l'onboarding mais n'est pas authentifié
-      if (hasSeenOnboarding) {
+      if (hasSeenOnboarding === true) {
         // Si on est sur l'onboarding alors qu'on l'a déjà vu, rediriger vers login
         if (inOnboarding) {
           router.replace('/login');
@@ -89,14 +110,29 @@ function RootLayoutNav() {
         if (inLogin) return;
         
         // Sinon, rediriger vers login
-          router.replace('/login');
+        router.replace('/login');
+        return;
+      }
+
+      // Si l'utilisateur n'a pas vu l'onboarding, l'afficher
+      if (hasSeenOnboarding === false) {
+        if (!inOnboarding) {
+          router.replace('/onboarding');
+        }
         return;
       }
     }
-  }, [hasSeenOnboarding, isAuthenticated, onboardingLoading, authLoading, segments, router]);
+  }, [hasSeenOnboarding, isAuthenticated, onboardingLoading, authLoading, segments, router, splashFinished]);
 
   return (
     <NavigationThemeProvider value={theme.resolved === 'dark' ? DarkTheme : DefaultTheme}>
+      {/* Afficher le splash React immédiatement pour couvrir le splash natif */}
+      {showSplash && (
+        <SplashScreen 
+          onFinish={() => setShowSplash(false)}
+          duration={2500}
+        />
+      )}
       <Stack>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />

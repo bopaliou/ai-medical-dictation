@@ -11,10 +11,6 @@ export function useOnboarding() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    checkOnboardingStatus();
-  }, []);
-
   const checkOnboardingStatus = async () => {
     try {
       const value = await AsyncStorage.getItem(ONBOARDING_KEY);
@@ -27,10 +23,17 @@ export function useOnboarding() {
     }
   };
 
+  useEffect(() => {
+    checkOnboardingStatus();
+  }, []);
+
   const markOnboardingAsSeen = async () => {
     try {
       await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+      // Mettre à jour l'état immédiatement
       setHasSeenOnboarding(true);
+      // Forcer une re-vérification pour s'assurer que la valeur est bien sauvegardée
+      await checkOnboardingStatus();
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'onboarding:', error);
     }

@@ -18,13 +18,15 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { patientsApiService, Patient } from '@/services/patientsApi';
 import { reportApiService, Report } from '@/services/reportApi';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeSlideUp, scalePress, scaleRelease, getCascadeDelay, ANIMATION_DURATION } from '@/utils/animations';
-import { Spacing } from '@/constants/design';
+import { Spacing, BorderRadius, Shadows } from '@/constants/design';
+import AppHeader from '@/components/AppHeader';
 
 type SortType = 'alphabetical' | 'recent';
 
@@ -219,11 +221,14 @@ export default function PatientsScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
       
+      {/* Header KadduCare */}
+      <AppHeader />
+
       {/* Header moderne et élégant avec recherche et filtres intégrés */}
       <View style={[styles.headerContainer, { 
         backgroundColor: theme.colors.backgroundCard, 
         borderBottomColor: theme.colors.border,
-        paddingTop: insets.top + Spacing.lg,
+        paddingTop: Spacing.lg,
       }]}>
         {/* Titre et compteur */}
         <View style={styles.headerTop}>
@@ -703,7 +708,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.lg,
     paddingHorizontal: Spacing.xl,
     borderBottomWidth: 1,
-    // paddingTop, backgroundColor et borderBottomColor appliqués dynamiquement
+    // backgroundColor et borderBottomColor appliqués dynamiquement
   },
   headerTop: {
     marginBottom: Spacing.lg,

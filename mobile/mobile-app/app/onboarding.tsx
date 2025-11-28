@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { Onboarding1Svg, Onboarding2Svg, Onboarding3Svg } from '@/components/OnboardingIllustrations';
@@ -78,7 +79,8 @@ export default function OnboardingScreen() {
 
   const handleFinish = async () => {
     await markOnboardingAsSeen();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Attendre un peu plus pour que l'état soit bien mis à jour dans _layout.tsx
+    await new Promise(resolve => setTimeout(resolve, 300));
     router.replace('/login');
   };
 
@@ -87,6 +89,13 @@ export default function OnboardingScreen() {
       <StatusBar style="auto" />
       
       <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('@/assets/images/logo-kadducare.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
         <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
           <Text style={styles.skipText}>Passer</Text>
         </TouchableOpacity>
@@ -174,7 +183,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: Platform.OS === 'ios' ? 12 : 20,
     paddingBottom: 12,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    width: 100,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
   },
   skipButton: {
     paddingVertical: 10,

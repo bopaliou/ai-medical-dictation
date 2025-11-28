@@ -14,12 +14,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
 import { fadeIn, slideUp, scaleIn, getCascadeDelay, ANIMATION_DURATION } from '@/utils/animations';
+import AppHeader from '@/components/AppHeader';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -147,7 +149,10 @@ export default function ProfileScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
       
-      {/* Header simple */}
+      {/* Header KadduCare */}
+      <AppHeader />
+
+      {/* Header avec titre */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.text }]}>Mon profil</Text>
       </View>
@@ -229,6 +234,34 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  // Header app avec logo KadduCare
+  appHeader: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderBottomWidth: 1,
+    // backgroundColor et borderBottomColor appliqués dynamiquement
+  },
+  appHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  appLogoContainer: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  appName: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    // color appliqué dynamiquement
   },
   header: {
     paddingHorizontal: Spacing.xl,

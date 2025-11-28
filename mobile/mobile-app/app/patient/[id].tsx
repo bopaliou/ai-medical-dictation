@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -191,6 +192,29 @@ export default function PatientDetailScreen() {
     >
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
 
+      {/* Header avec logo KadduCare */}
+      <View
+        style={[
+          styles.appHeader, 
+          { 
+            backgroundColor: theme.colors.backgroundCard,
+            borderBottomColor: theme.colors.border,
+            paddingTop: insets.top + 8,
+          }
+        ]}
+      >
+        <View style={styles.appHeaderContent}>
+          <View style={styles.appLogoContainer}>
+            <Image 
+              source={require('@/assets/images/logo-kadducare.png')} 
+              style={styles.appLogo}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={[styles.appName, { color: theme.colors.text }]}>KadduCare</Text>
+        </View>
+      </View>
+
       {/* Header moderne et élégant */}
       <View
         style={[
@@ -198,7 +222,6 @@ export default function PatientDetailScreen() {
           { 
             backgroundColor: theme.colors.backgroundCard,
             borderBottomColor: theme.colors.border,
-            paddingTop: insets.top 
           }
         ]}
       >
@@ -220,12 +243,14 @@ export default function PatientDetailScreen() {
             <View style={[styles.headerIconContainer, { backgroundColor: theme.colors.primary }]}>
               <Ionicons name="person" size={16} color="#FFFFFF" />
             </View>
-            <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
-              {patient.full_name}
-            </Text>
-            <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]} numberOfLines={1}>
-              {hasChanges ? 'Modifications en cours' : 'Informations personnelles'}
-            </Text>
+            <View style={styles.headerTextWrapper}>
+              <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {patient.full_name}
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                {hasChanges ? 'Modifications en cours' : 'Informations personnelles'}
+              </Text>
+            </View>
           </View>
           
           {hasChanges && (
@@ -562,6 +587,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // Header app avec logo KadduCare
+  appHeader: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    // backgroundColor et borderBottomColor appliqués dynamiquement
+  },
+  appHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  appLogoContainer: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  appName: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    // color appliqué dynamiquement
+  },
   headerGradient: {
     paddingBottom: 20,
     borderBottomWidth: 1,
@@ -595,6 +648,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
+    overflow: 'hidden',
+  },
+  headerTextWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
   headerIconContainer: {

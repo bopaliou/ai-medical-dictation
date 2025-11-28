@@ -28,6 +28,7 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
   const scaleAnim = React.useRef(new Animated.Value(0.85)).current;
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
   const shadowOpacityAnim = React.useRef(new Animated.Value(0.3)).current;
+  const isAnimating = React.useRef(false);
 
   // Animation d'apparition premium : fade + scale
   useEffect(() => {
@@ -57,31 +58,48 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
   const shouldHide = hiddenScreens.includes(currentScreen);
 
   const handlePress = () => {
+    // Éviter les appels multiples pendant l'animation
+    if (isAnimating.current) {
+      return;
+    }
+
     // Feedback haptique
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Arrêter toute animation en cours sur scaleAnim avant d'en démarrer une nouvelle
-    scaleAnim.stopAnimation();
-    // Réinitialiser la valeur à 1 avant de démarrer la nouvelle animation
-    scaleAnim.setValue(1);
+    // Marquer comme en cours d'animation
+    isAnimating.current = true;
+
+    // Arrêter toute animation en cours sur scaleAnim et récupérer la valeur actuelle
+    scaleAnim.stopAnimation((currentValue) => {
+      // Réinitialiser à 1 avant de démarrer la nouvelle animation
+      scaleAnim.setValue(1);
+      
+      // Animation swell premium : scale 1 → 1.08 → 1
+      const swellAnimation = swell(scaleAnim, 1.08, ANIMATION_DURATION.FAB);
+      swellAnimation.start((finished) => {
+        // Réinitialiser le flag quand l'animation est terminée (ou interrompue)
+        isAnimating.current = false;
+      });
+    });
     
-    // Animation swell premium : scale 1 → 1.08 → 1
-    swell(scaleAnim, 1.08, ANIMATION_DURATION.FAB).start();
-    
-    // Animation de l'ombre (subtile)
-    shadowOpacityAnim.stopAnimation();
-    Animated.sequence([
-      Animated.timing(shadowOpacityAnim, {
-        toValue: 0.5,
-        duration: ANIMATION_DURATION.FAB / 2,
-        useNativeDriver: false,
-      }),
-      Animated.timing(shadowOpacityAnim, {
-        toValue: 0.3,
-        duration: ANIMATION_DURATION.FAB / 2,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    // Animation de l'ombre (subtile) - doit être arrêtée proprement
+    shadowOpacityAnim.stopAnimation((value) => {
+      const currentShadowValue = value !== undefined ? value : 0.3;
+      shadowOpacityAnim.setValue(currentShadowValue);
+      
+      Animated.sequence([
+        Animated.timing(shadowOpacityAnim, {
+          toValue: 0.5,
+          duration: ANIMATION_DURATION.FAB / 2,
+          useNativeDriver: false,
+        }),
+        Animated.timing(shadowOpacityAnim, {
+          toValue: 0.3,
+          duration: ANIMATION_DURATION.FAB / 2,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    });
 
     if (onPress) {
       onPress();
