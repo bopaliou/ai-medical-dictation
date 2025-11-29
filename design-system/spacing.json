@@ -1,0 +1,166 @@
+{
+  "base": 4,
+  "scale": {
+    "xs": {
+      "value": 4,
+      "rem": "0.25rem",
+      "usage": "Espacement très petit"
+    },
+    "sm": {
+      "value": 8,
+      "rem": "0.5rem",
+      "usage": "Espacement petit"
+    },
+    "md": {
+      "value": 12,
+      "rem": "0.75rem",
+      "usage": "Espacement moyen"
+    },
+    "lg": {
+      "value": 16,
+      "rem": "1rem",
+      "usage": "Espacement large"
+    },
+    "xl": {
+      "value": 20,
+      "rem": "1.25rem",
+      "usage": "Espacement très large"
+    },
+    "xxl": {
+      "value": 24,
+      "rem": "1.5rem",
+      "usage": "Espacement extra large"
+    },
+    "xxxl": {
+      "value": 32,
+      "rem": "2rem",
+      "usage": "Espacement triple large"
+    },
+    "xxxxl": {
+      "value": 40,
+      "rem": "2.5rem",
+      "usage": "Espacement quadruple large"
+    },
+    "xxxxxl": {
+      "value": 48,
+      "rem": "3rem",
+      "usage": "Espacement quintuple large"
+    }
+  },
+  "specific": {
+    "section": {
+      "value": 32,
+      "usage": "Espacement entre sections principales"
+    },
+    "sectionLarge": {
+      "value": 48,
+      "usage": "Espacement entre grandes sections"
+    },
+    "cardPadding": {
+      "value": 20,
+      "usage": "Padding interne des cartes"
+    },
+    "screenPadding": {
+      "value": 24,
+      "usage": "Padding latéral des écrans"
+    }
+  },
+  "usage": {
+    "padding": {
+      "cards": {
+        "value": "cardPadding (20px)",
+        "description": "Padding interne des cartes"
+      },
+      "buttons": {
+        "horizontal": "lg (16px)",
+        "vertical": "md (12px)",
+        "description": "Padding des boutons"
+      },
+      "inputs": {
+        "horizontal": "md (12px)",
+        "vertical": "md (12px)",
+        "description": "Padding des inputs"
+      },
+      "screen": {
+        "horizontal": "screenPadding (24px)",
+        "description": "Padding latéral des écrans"
+      }
+    },
+    "margins": {
+      "betweenCards": {
+        "value": "lg (16px)",
+        "description": "Marge entre les cartes"
+      },
+      "betweenSections": {
+        "value": "section (32px)",
+        "description": "Marge entre les sections"
+      },
+      "titleToContent": {
+        "value": "md (12px)",
+        "description": "Marge entre titre et contenu"
+      }
+    },
+    "gaps": {
+      "logoAndText": {
+        "value": "md (12px)",
+        "description": "Espacement entre logo et texte"
+      },
+      "iconAndText": {
+        "value": "sm (8px)",
+        "description": "Espacement entre icône et texte"
+      },
+      "iconAndIcon": {
+        "value": "md (12px)",
+        "description": "Espacement entre icônes"
+      },
+      "listItems": {
+        "value": "md (12px)",
+        "description": "Espacement entre items de liste"
+      }
+    }
+  },
+  "headers": {
+    "main": {
+      "paddingTop": "Safe Area + md (12px)",
+      "paddingBottom": "lg (16px)",
+      "paddingHorizontal": "screenPadding (24px)",
+      "gap": "md (12px)"
+    },
+    "compact": {
+      "paddingTop": "md (12px)",
+      "paddingBottom": "md (12px)",
+      "paddingHorizontal": "screenPadding (24px)"
+    }
+  },
+  "lists": {
+    "paddingHorizontal": "screenPadding (24px)",
+    "paddingVertical": "lg (16px)",
+    "itemSpacing": "md (12px)"
+  },
+  "forms": {
+    "fieldSpacing": "xl (20px)",
+    "groupSpacing": "section (32px)",
+    "labelMargin": "sm (8px)"
+  },
+  "touchTargets": {
+    "minimum": 44,
+    "description": "Taille minimum pour les éléments interactifs (iOS/Android standard)",
+    "spacing": {
+      "minimum": 8,
+      "description": "Espacement minimum entre les touch targets"
+    }
+  },
+  "responsive": {
+    "mobile": {
+      "screenPadding": 24,
+      "cardPadding": 20,
+      "sectionMargin": 32
+    },
+    "tablet": {
+      "screenPadding": 32,
+      "cardPadding": 24,
+      "sectionMargin": 48
+    }
+  }
+}
+

@@ -8,7 +8,7 @@ import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import KadduCareLogo from './KadduCareLogo';
-import { Spacing, Typography } from '@/constants/design';
+import { Spacing, Typography, Shadows } from '@/constants/design';
 
 interface AppHeaderProps {
   showLogo?: boolean;
@@ -62,23 +62,29 @@ export default function AppHeader({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.screenPadding,
+    paddingVertical: Spacing.lg, // 16px selon Design System
+    paddingHorizontal: Spacing.screenPadding, // 24px selon Design System
     borderBottomWidth: 1,
+    ...Shadows.sm, // Ombre subtile selon Design System
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.md, // 12px selon Design System
   },
   title: {
-    ...Typography.h1,
+    ...Typography.h1, // 32px, 700 weight selon Design System
     fontSize: 36,
     fontWeight: '800',
-    letterSpacing: -1,
+    letterSpacing: -0.8, // Selon Design System
+    lineHeight: 40, // Selon Design System
   },
   titleCompact: {
+    ...Typography.h2, // 28px, 700 weight selon Design System
     fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    lineHeight: 36,
   },
 });
 

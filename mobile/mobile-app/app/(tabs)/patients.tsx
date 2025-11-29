@@ -25,8 +25,9 @@ import { patientsApiService, Patient } from '@/services/patientsApi';
 import { reportApiService, Report } from '@/services/reportApi';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeSlideUp, scalePress, scaleRelease, getCascadeDelay, ANIMATION_DURATION } from '@/utils/animations';
-import { Spacing, BorderRadius, Shadows } from '@/constants/design';
+import { Spacing, BorderRadius, Shadows, Typography } from '@/constants/design';
 import AppHeader from '@/components/AppHeader';
+import * as Haptics from 'expo-haptics';
 
 type SortType = 'alphabetical' | 'recent';
 
@@ -730,6 +731,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
+    ...Typography.h2, // 28px, 700 weight selon Design System
     fontSize: 28,
     fontWeight: '700',
     letterSpacing: -0.5,
@@ -737,25 +739,28 @@ const styles = StyleSheet.create({
     // color appliqué dynamiquement
   },
   subtitle: {
+    ...Typography.label, // 14px, 600 weight selon Design System
     fontSize: 14,
     fontWeight: '500',
+    letterSpacing: 0.1,
     // color appliqué dynamiquement
   },
-  // Barre de recherche premium
+  // Barre de recherche premium selon Design System
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: 16,
+    paddingHorizontal: Spacing.md, // 12px
+    paddingVertical: Spacing.md, // 12px
+    borderRadius: BorderRadius.input, // 12px selon Design System
     borderWidth: 1,
     marginBottom: Spacing.md,
+    ...Shadows.sm, // Ombre subtile selon Design System
     // backgroundColor et borderColor appliqués dynamiquement
   },
   searchIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36, // Légèrement plus grand
+    height: 36,
+    borderRadius: BorderRadius.badge, // 12px selon Design System
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: Spacing.md,
@@ -763,6 +768,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    ...Typography.body, // 16px, 400 weight selon Design System
     fontSize: 16,
     fontWeight: '400',
     // color appliqué dynamiquement
@@ -784,16 +790,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: 14,
+    gap: Spacing.xs, // 4px
+    paddingHorizontal: Spacing.md, // 12px
+    paddingVertical: Spacing.md, // 12px
+    borderRadius: BorderRadius.button, // 16px selon Design System
     borderWidth: 1,
+    minHeight: 44, // Touch target minimum selon Design System
     // backgroundColor et borderColor appliqués dynamiquement
   },
   sortButtonText: {
+    ...Typography.label, // 14px, 600 weight selon Design System
     fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.1,
     // color appliqué dynamiquement
   },
   loadingContainer: {
@@ -843,11 +852,13 @@ const styles = StyleSheet.create({
   patientCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: BorderRadius.card, // 20px selon Design System
+    padding: Spacing.cardPadding, // 20px selon Design System
     borderWidth: 1,
     minHeight: 140, // Hauteur augmentée pour afficher les détails médicaux
-    // backgroundColor et borderColor appliqués dynamiquement
+    ...Shadows.lg, // Ombre plus visible selon Design System
+    backgroundColor: '#FFFFFF', // Blanc pur selon Design System
+    // borderColor appliqué dynamiquement
   },
   avatarContainer: {
     marginRight: 14,
@@ -874,11 +885,12 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   patientName: {
+    ...Typography.h4, // 20px, 600 weight selon Design System
     fontSize: 19,
     fontWeight: '700',
-    marginBottom: 10,
-    letterSpacing: -0.3,
-    lineHeight: 24,
+    marginBottom: Spacing.sm + 2, // 10px
+    letterSpacing: -0.2,
+    lineHeight: 28,
   },
   // Ligne principale d'informations (âge, genre)
   mainInfoRow: {
@@ -893,9 +905,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   infoText: {
+    ...Typography.label, // 14px, 600 weight selon Design System
     fontSize: 14,
     fontWeight: '600',
-    letterSpacing: -0.1,
+    letterSpacing: 0.1,
   },
   // Ligne secondaire (chambre, unité)
   secondaryInfoRow: {
@@ -905,8 +918,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   secondaryInfoText: {
+    ...Typography.labelSmall, // 13px, 500 weight selon Design System
     fontSize: 13,
     fontWeight: '500',
+    letterSpacing: 0.1,
   },
   // Conteneur des détails médicaux
   medicalDetailsContainer: {

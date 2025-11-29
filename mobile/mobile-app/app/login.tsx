@@ -21,6 +21,9 @@ import { Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApiService } from '@/services/authApi';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Spacing, BorderRadius, Shadows, Typography } from '@/constants/design';
+import Button from '@/components/Button';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -216,18 +219,16 @@ export default function LoginScreen() {
               </Animated.View>
             )}
 
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+            <Button
+              title="Se connecter"
               onPress={handleLogin}
+              variant="primary"
+              loading={loading}
               disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.loginButtonText}>Se connecter</Text>
-              )}
-            </TouchableOpacity>
+              fullWidth
+              icon="log-in-outline"
+              iconPosition="right"
+            />
 
             {backendStatus === 'offline' && (
               <View style={styles.warningContainer}>
@@ -296,17 +297,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 4,
-    paddingHorizontal: 18,
-    height: 58,
-    borderWidth: 1.5,
+    borderRadius: BorderRadius.input, // 12px selon Design System
+    marginBottom: Spacing.xs, // 4px
+    paddingHorizontal: Spacing.md, // 12px
+    minHeight: 48, // Touch target minimum selon Design System
+    borderWidth: 1,
     borderColor: '#E5E5EA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    ...Shadows.sm, // Ombre subtile selon Design System
   },
   inputContainerError: {
     backgroundColor: '#FFF5F5',
@@ -317,6 +314,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    ...Typography.body, // 16px, 400 weight selon Design System
     fontSize: 16,
     color: '#1A1A1A',
     fontWeight: '400',
@@ -324,28 +322,8 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
-  loginButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 16,
-    height: 58,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
+  // Le bouton utilise maintenant le composant Button selon le Design System
+  // Styles supprimés car gérés par le composant Button
   warningContainer: {
     flexDirection: 'row',
     alignItems: 'center',

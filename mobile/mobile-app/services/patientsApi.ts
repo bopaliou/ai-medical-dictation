@@ -6,6 +6,7 @@ import axios, { AxiosError } from 'axios';
 import { API_CONFIG } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isTokenExpiredError, handleTokenExpiration } from '../utils/authInterceptor';
+import { rateLimiter } from '../utils/rateLimiter';
 
 export interface Patient {
   id: string;
@@ -168,84 +169,92 @@ class PatientsApiService {
    * Récupère tous les patients
    */
   async getAllPatients(): Promise<Patient[]> {
-    try {
-      const token = await this.getAuthToken();
-      if (!token) {
-        throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
-      }
+    const requestKey = 'getAllPatients';
+    
+    // Utiliser debounce pour éviter les requêtes multiples
+    return rateLimiter.debounce(requestKey, async () => {
+      // Retry avec backoff pour les erreurs 429
+      return rateLimiter.retryWithBackoff(async () => {
+        try {
+          const token = await this.getAuthToken();
+          if (!token) {
+            throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
+          }
 
-      console.log('📋 Récupération de tous les patients');
-      console.log('📡 URL:', `${this.baseURL}/api/patients`);
+          console.log('📋 Récupération de tous les patients');
+          console.log('📡 URL:', `${this.baseURL}/api/patients`);
 
-      const response = await axios.get<SearchPatientsResponse>(
-        `${this.baseURL}/api/patients`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-        }
-      ).catch(async (error) => {
-        // Log détaillé en cas d'erreur 401
-        if (error.response?.status === 401) {
-          console.error('❌ Erreur 401 lors de getAllPatients');
-          console.error('Token utilisé (premiers 50 caractères):', token.substring(0, 50) + '...');
-          console.error('URL:', `${this.baseURL}/api/patients`);
-          console.error('Réponse backend:', error.response?.data);
+          const response = await axios.get<SearchPatientsResponse>(
+            `${this.baseURL}/api/patients`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: 10000,
+            }
+          ).catch(async (error) => {
+            // Log détaillé en cas d'erreur 401
+            if (error.response?.status === 401) {
+              console.error('❌ Erreur 401 lors de getAllPatients');
+              console.error('Token utilisé (premiers 50 caractères):', token.substring(0, 50) + '...');
+              console.error('URL:', `${this.baseURL}/api/patients`);
+              console.error('Réponse backend:', error.response?.data);
+              
+              // Si le token est expiré, déconnecter automatiquement
+              if (isTokenExpiredError(error)) {
+                console.error('💡 Token expiré - Déconnexion automatique...');
+                await handleTokenExpiration();
+                throw new Error('TOKEN_EXPIRED');
+              }
+              
+              console.error('💡 Le token peut être expiré. Essayez de vous reconnecter.');
+            }
+            throw error;
+          });
+
+          if (response.data.ok && response.data.patients) {
+            // Mettre à jour le cache
+            await this.updateCache(response.data.patients);
+            return response.data.patients;
+          }
+
+          return [];
+        } catch (error: any) {
+          console.error('Erreur lors de la récupération des patients:', error);
           
-          // Si le token est expiré, déconnecter automatiquement
-          if (isTokenExpiredError(error)) {
-            console.error('💡 Token expiré - Déconnexion automatique...');
-            await handleTokenExpiration();
-            throw new Error('TOKEN_EXPIRED');
+          // Gestion spécifique des erreurs réseau
+          if (axios.isAxiosError(error)) {
+            if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+              const errorMessage = `Impossible de se connecter au serveur.\n\n` +
+                `Vérifiez que :\n` +
+                `• Le backend est démarré (port 3000)\n` +
+                `• Votre appareil est sur le même réseau WiFi\n` +
+                `• L'IP dans app.json correspond à votre ordinateur\n` +
+                `\nURL configurée : ${this.baseURL}`;
+              throw new Error(errorMessage);
+            }
           }
           
-          console.error('💡 Le token peut être expiré. Essayez de vous reconnecter.');
-        }
-        throw error;
-      });
-
-      if (response.data.ok && response.data.patients) {
-        // Mettre à jour le cache
-        await this.updateCache(response.data.patients);
-        return response.data.patients;
-      }
-
-      return [];
-    } catch (error: any) {
-      console.error('Erreur lors de la récupération des patients:', error);
-      
-      // Gestion spécifique des erreurs réseau
-      if (axios.isAxiosError(error)) {
-        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-          const errorMessage = `Impossible de se connecter au serveur.\n\n` +
-            `Vérifiez que :\n` +
-            `• Le backend est démarré (port 3000)\n` +
-            `• Votre appareil est sur le même réseau WiFi\n` +
-            `• L'IP dans app.json correspond à votre ordinateur\n` +
-            `\nURL configurée : ${this.baseURL}`;
-          throw new Error(errorMessage);
-        }
-      }
-      
-      // Si erreur 401 avec message "expired", le token est expiré
-      if (error.response?.status === 401) {
-        const errorMessage = error.response?.data?.message || '';
-        if (errorMessage.includes('expired') || errorMessage.includes('expiré')) {
-          console.warn('⚠️ Token expiré détecté, suppression du token...');
-          // Supprimer le token expiré
-          await AsyncStorage.removeItem('@auth_token');
-          await AsyncStorage.removeItem('@auth_user');
+          // Si erreur 401 avec message "expired", le token est expiré
+          if (error.response?.status === 401) {
+            const errorMessage = error.response?.data?.message || '';
+            if (errorMessage.includes('expired') || errorMessage.includes('expiré')) {
+              console.warn('⚠️ Token expiré détecté, suppression du token...');
+              // Supprimer le token expiré
+              await AsyncStorage.removeItem('@auth_token');
+              await AsyncStorage.removeItem('@auth_user');
+              
+              // Lancer une erreur spéciale pour que le composant puisse réagir
+              throw new Error('SESSION_EXPIRED');
+            }
+          }
           
-          // Lancer une erreur spéciale pour que le composant puisse réagir
-          throw new Error('SESSION_EXPIRED');
+          // En cas d'erreur, retourner le cache
+          return await this.getCachedPatients();
         }
-      }
-      
-      // En cas d'erreur, retourner le cache
-      return await this.getCachedPatients();
-    }
+      }, 3, 1000); // 3 tentatives avec délai initial de 1s
+    }, 500); // Debounce de 500ms
   }
 
   /**

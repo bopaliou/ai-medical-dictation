@@ -33,7 +33,7 @@ import NetworkErrorBanner from '@/components/NetworkErrorBanner';
 import ReportCard from '@/components/ReportCard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
-import AppHeader from '@/components/AppHeader';
+import HomeHeader from '@/components/HomeHeader';
 
 // Composant Mini-Card pour les statistiques récentes
 interface StatMiniCardProps {
@@ -92,9 +92,9 @@ function StatMiniCard({ icon, label, value, theme, index, accentColor, isDate = 
   };
 
   const isLightMode = theme.resolved === 'light';
-  // Design épuré : fond plus clair et subtil
-  const cardBg = isLightMode ? theme.colors.backgroundSecondary : '#1F1F22';
-  const iconBg = isLightMode ? accentColor + '20' : accentColor + '25';
+  // Design premium selon Design System : fond blanc pur pour cartes
+  const cardBg = '#FFFFFF'; // Blanc pur selon Design System - plus visible
+  const iconBg = theme.colors.primaryLight; // Primary light selon Design System - plus visible
 
   return (
     <Animated.View
@@ -116,9 +116,9 @@ function StatMiniCard({ icon, label, value, theme, index, accentColor, isDate = 
         style={styles.statMiniCardContent}
       >
         <View style={[styles.statMiniIconContainer, { backgroundColor: iconBg }]}>
-          <Ionicons name={icon} size={16} color={accentColor} />
+          <Ionicons name={icon} size={18} color={accentColor} />
         </View>
-        <Text 
+        <Text
           style={[styles.statMiniValue, { color: theme.colors.text }]}
           numberOfLines={1}
           adjustsFontSizeToFit={true}
@@ -126,7 +126,7 @@ function StatMiniCard({ icon, label, value, theme, index, accentColor, isDate = 
         >
           {value}
         </Text>
-        <Text 
+        <Text
           style={[styles.statMiniLabel, { color: theme.colors.textSecondary }]}
           numberOfLines={1}
           adjustsFontSizeToFit={true}
@@ -290,7 +290,7 @@ function DatePickerSection({
             onPress={() => handleQuickPeriod('today')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.todayButtonText, { 
+            <Text style={[styles.todayButtonText, {
               color: selectedPeriod === 'day' ? '#FFFFFF' : theme.colors.primary,
               fontWeight: selectedPeriod === 'day' ? '600' : '500',
             }]}>
@@ -348,10 +348,10 @@ function DatePickerSection({
                       backgroundColor: selected
                         ? theme.colors.primary
                         : today
-                        ? theme.colors.primaryLight
-                        : theme.resolved === 'light'
-                        ? '#F2F4F7'
-                        : '#26272B',
+                          ? theme.colors.primaryLight
+                          : theme.resolved === 'light'
+                            ? '#F2F4F7'
+                            : '#26272B',
                       borderColor: selected
                         ? theme.colors.primary
                         : theme.colors.borderCard,
@@ -410,7 +410,7 @@ function DatePickerSection({
                 delayPressIn={0}
                 delayPressOut={0}
               >
-                <Text style={[styles.quickPeriodText, { 
+                <Text style={[styles.quickPeriodText, {
                   color: isSelected ? '#FFFFFF' : theme.colors.text,
                   fontWeight: isSelected ? '600' : '500',
                 }]}>
@@ -582,14 +582,14 @@ function getStatsForDate(date: Date, allReports: Report[]) {
 
   const reportsForDate = allReports.filter((report) => {
     if (!report.created_at) return false;
-    
+
     // Créer une date à partir de created_at
     const reportDate = new Date(report.created_at);
-    
+
     // Normaliser la date du rapport (ignorer l'heure)
     const reportDateNormalized = new Date(reportDate);
     reportDateNormalized.setHours(0, 0, 0, 0);
-    
+
     // Comparer uniquement les dates (jour/mois/année)
     return isSameDay(selectedDateNormalized, reportDateNormalized);
   });
@@ -622,7 +622,7 @@ function InteractiveSparklineChart({ data, theme }: InteractiveSparklineChartPro
   const maxValue = Math.max(...data.map(d => d.count), 1);
   const chartHeight = 70;
   const [sliderLayout, setSliderLayout] = React.useState({ x: 0, width: 0 });
-  
+
   const selectedData = data[selectedIndex] || data[data.length - 1];
   const stepWidth = sliderLayout.width > 0 ? sliderLayout.width / (data.length - 1 || 1) : 0;
   const cursorPosition = selectedIndex * stepWidth;
@@ -654,7 +654,7 @@ function InteractiveSparklineChart({ data, theme }: InteractiveSparklineChartPro
 
       {/* Affichage de la date sélectionnée - Simple et clair */}
       {selectedData && (
-        <View style={[styles.sparklineSelectedInfo, { 
+        <View style={[styles.sparklineSelectedInfo, {
           backgroundColor: theme.colors.primaryLight,
           borderColor: theme.colors.primary,
         }]}>
@@ -669,14 +669,14 @@ function InteractiveSparklineChart({ data, theme }: InteractiveSparklineChartPro
           </View>
         </View>
       )}
-      
+
       <View style={styles.sparklineWrapper}>
         {/* Graphique avec barres - Plus grandes et claires */}
         <View style={styles.sparklineBars}>
           {data.map((item, index) => {
             const barHeight = (item.count / maxValue) * chartHeight;
             const isSelected = index === selectedIndex;
-            
+
             return (
               <TouchableOpacity
                 key={index}
@@ -762,11 +762,11 @@ export default function DashboardScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const [showPatientModal, setShowPatientModal] = useState(false);
-  
+
   // Animations d'écran : fade + slide-up
   const screenOpacity = React.useRef(new Animated.Value(0)).current;
   const screenTranslateY = React.useRef(new Animated.Value(20)).current;
-  
+
   React.useEffect(() => {
     Animated.parallel([
       fadeIn(screenOpacity, ANIMATION_DURATION.SCREEN_TRANSITION),
@@ -783,8 +783,23 @@ export default function DashboardScreen() {
 
   const firstName = user?.full_name?.split(' ')[0] || '';
 
+  // Flag pour éviter les requêtes multiples simultanées (utilise des clés pour différencier les types de chargement)
+  const isLoadingRef = React.useRef<string | false>(false);
+
   const loadRecentReports = async () => {
+    // Utiliser un ref séparé pour éviter les conflits avec loadStatistics
+    const reportsLoadingKey = 'reports';
+    if (isLoadingRef.current && isLoadingRef.current !== reportsLoadingKey) {
+      console.log('⏸️ Autre requête en cours, attente...');
+      // Attendre un peu et réessayer
+      setTimeout(() => {
+        loadRecentReports();
+      }, 500);
+      return;
+    }
+
     try {
+      isLoadingRef.current = reportsLoadingKey as string;
       setIsLoadingNotes(true);
       setNetworkError(null);
       // Charger tous les rapports récents (tous statuts) et les trier par date
@@ -802,34 +817,55 @@ export default function DashboardScreen() {
     } catch (error: any) {
       console.error('Erreur lors du chargement des rapports récents:', error);
       setRecentReports([]);
-      
+
       // Afficher un message d'erreur clair si c'est une erreur réseau
       if (error.message && error.message.includes('Impossible de se connecter')) {
         setNetworkError(error.message);
       }
     } finally {
       setIsLoadingNotes(false);
+      isLoadingRef.current = false;
     }
   };
 
   const loadStatistics = async () => {
+    // Utiliser un ref séparé pour éviter les conflits avec loadRecentReports
+    const statsLoadingKey = 'stats';
+    if (isLoadingRef.current && isLoadingRef.current !== statsLoadingKey) {
+      console.log('⏸️ Autre requête en cours, attente...');
+      // Attendre un peu et réessayer
+      setTimeout(() => {
+        loadStatistics();
+      }, 500);
+      return;
+    }
+
     try {
+      isLoadingRef.current = statsLoadingKey as string;
       setIsLoadingStats(true);
       setNetworkError(null);
+      console.log('📊 Chargement des statistiques...');
+
       // Charger le nombre de patients
       const patients = await patientsApiService.getAllPatients();
       setTotalPatients(patients.length);
+      console.log('👥 Patients chargés:', patients.length);
 
       // Charger TOUS les rapports pour les statistiques (pas seulement les 50 récents)
       // Cela permet d'avoir des statistiques précises pour toutes les périodes
       const reportsResponse = await reportApiService.getReports({ limit: 1000 });
       if (reportsResponse.ok && reportsResponse.reports) {
         setAllReports(reportsResponse.reports);
+        console.log('📋 Rapports chargés pour statistiques:', reportsResponse.reports.length);
+      } else {
+        console.log('⚠️ Aucun rapport trouvé ou réponse invalide');
+        setAllReports([]);
       }
     } catch (error: any) {
-      console.error('Erreur lors du chargement des statistiques:', error);
+      console.error('❌ Erreur lors du chargement des statistiques:', error);
       setTotalPatients(0);
-      
+      setAllReports([]); // S'assurer que allReports est un tableau vide en cas d'erreur
+
       // Afficher un message d'erreur clair si c'est une erreur réseau
       if (error.message && error.message.includes('Impossible de se connecter')) {
         setNetworkError(error.message);
@@ -837,6 +873,8 @@ export default function DashboardScreen() {
       }
     } finally {
       setIsLoadingStats(false);
+      isLoadingRef.current = false; // Réinitialiser le ref pour permettre les prochaines requêtes
+      console.log('✅ Chargement des statistiques terminé');
     }
   };
 
@@ -844,15 +882,17 @@ export default function DashboardScreen() {
   // Calculer les statistiques détaillées pour la section premium - Toutes les données
   const calculateDetailedStats = React.useMemo(() => {
     // Utiliser tous les rapports sans filtrage de période
-    const reportsForPeriod = allReports;
+    const reportsForPeriod = allReports || []; // S'assurer que c'est toujours un tableau
+
+    console.log('📊 Calcul des statistiques avec', reportsForPeriod.length, 'rapports');
 
     // Rapports finalisés pour la période
-    const finalizedReports = reportsForPeriod.filter(report => 
+    const finalizedReports = reportsForPeriod.filter(report =>
       report.status === 'final'
     ).length;
 
     // Brouillons en cours pour la période
-    const draftReports = reportsForPeriod.filter(report => 
+    const draftReports = reportsForPeriod.filter(report =>
       report.status === 'draft'
     ).length;
 
@@ -863,12 +903,16 @@ export default function DashboardScreen() {
         .map(report => report.patient_id)
     ).size;
 
-    return {
+    const stats = {
       reportsThisWeek: reportsForPeriod.length,
       finalizedReports,
       draftReports,
       newPatientsThisWeek: newPatientsForPeriod,
     };
+
+    console.log('📊 Statistiques calculées:', stats);
+
+    return stats;
   }, [allReports]);
 
   // Filtrer les rapports récents par statut uniquement
@@ -880,14 +924,34 @@ export default function DashboardScreen() {
   }, [recentReports, statusFilter]);
 
   useEffect(() => {
-    loadRecentReports();
-    loadStatistics();
+    // Charger les données au montage avec un petit délai pour éviter les requêtes multiples
+    const timer = setTimeout(() => {
+      console.log('🚀 Initialisation du chargement des données...');
+      // Charger les statistiques en premier car elles sont plus importantes
+      loadStatistics();
+      // Charger les rapports récents après un court délai
+      setTimeout(() => {
+        loadRecentReports();
+      }, 300);
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useFocusEffect(
     React.useCallback(() => {
-      loadRecentReports();
-      loadStatistics();
+      // Attendre un court délai avant de charger pour éviter les requêtes multiples au focus
+      const timer = setTimeout(() => {
+        console.log('🔄 Rechargement des données au focus...');
+        // Charger les statistiques en premier
+        loadStatistics();
+        // Charger les rapports récents après un court délai
+        setTimeout(() => {
+          loadRecentReports();
+        }, 300);
+      }, 300); // Délai de 300ms pour éviter les requêtes multiples
+
+      return () => clearTimeout(timer);
     }, [])
   );
 
@@ -911,16 +975,16 @@ export default function DashboardScreen() {
 
   const handlePatientSelected = (result: PatientSelectionResult) => {
     setShowPatientModal(false);
-    
+
     const params: Record<string, string> = {
       patientId: result.patientId || '',
       skip: result.skip ? 'true' : 'false',
     };
-    
+
     if (result.patientData) {
       params.patientData = JSON.stringify(result.patientData);
     }
-    
+
     setTimeout(() => {
       router.push({
         pathname: '/record',
@@ -947,7 +1011,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         { flex: 1 },
         {
@@ -956,12 +1020,16 @@ export default function DashboardScreen() {
         },
       ]}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['left', 'right']}>
         <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
-        
+
         {/* Header KadduCare - Fixe en haut */}
-        <AppHeader />
-        
+        <HomeHeader
+          user={user}
+          onMenuPress={() => console.log('Menu pressed')}
+          onProfilePress={() => router.push('/(tabs)/settings' as any)}
+        />
+
         {/* Bannière d'erreur réseau élégante */}
         <NetworkErrorBanner
           message={networkError || ''}
@@ -969,196 +1037,187 @@ export default function DashboardScreen() {
           onDismiss={() => setNetworkError(null)}
           onRetry={handleRetryConnection}
         />
-        
+
         <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          networkError && { paddingTop: 200 }, // Espace pour la bannière d'erreur
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            networkError && { paddingTop: 200 }, // Espace pour la bannière d'erreur
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
 
-        {/* Header avec message de bienvenue - Design premium */}
-        <View style={[styles.welcomeSection, { 
-          backgroundColor: theme.colors.background,
-        }]}>
-          <View style={styles.welcomeContent}>
-            <View style={styles.welcomeTextContainer}>
-              <Text style={[styles.greeting, { color: theme.colors.text }]}>
-                {firstName ? `Bonjour, ${firstName}` : 'Bienvenue'}
-              </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
-                Voici vos dernières activités
-              </Text>
-            </View>
-            <View style={[styles.avatarContainer, { 
-              backgroundColor: theme.colors.primaryLight,
-              ...Shadows.md,
+          {/* Section Statistiques récentes - Premium et épurée selon Design System */}
+          {isLoadingStats ? (
+            <View style={[styles.recentStatsSection, {
+              backgroundColor: '#FFFFFF',
+              borderColor: theme.colors.borderCard,
+              minHeight: 200,
+              justifyContent: 'center',
+              alignItems: 'center',
             }]}>
-              <Ionicons name="person" size={28} color={theme.colors.primary} />
-            </View>
-          </View>
-        </View>
-
-        {/* Section Statistiques récentes - Premium et épurée */}
-        {!isLoadingStats && (
-          <View style={[styles.recentStatsSection, { 
-            backgroundColor: theme.colors.backgroundCard,
-            borderColor: theme.colors.borderCard,
-          }]}>
-            <View style={styles.recentStatsHeader}>
-              <View style={styles.recentStatsTitleRow}>
-                <View style={[styles.recentStatsIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
-                  <Ionicons name="stats-chart" size={18} color={theme.colors.primary} />
-                </View>
-                <View style={styles.recentStatsTitleContainer}>
-                  <Text style={[styles.recentStatsTitle, { color: theme.colors.text }]}>
-                    Statistiques récentes
-                  </Text>
-                  <Text style={[styles.recentStatsSubtitle, { color: theme.colors.textMuted }]}>
-                    Synthèse de vos activités de dictée
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Card Total rapports - Pleine largeur en haut */}
-            <View style={styles.fullWidthCardContainer}>
-              <StatMiniCard
-                icon="calendar"
-                label="Total des rapports"
-                value={calculateDetailedStats.reportsThisWeek}
-                theme={theme}
-                index={0}
-                accentColor={theme.colors.primary}
-                fullWidth={true}
-              />
-            </View>
-
-            {/* Mini-cards de statistiques - Alignées 2 par 2 */}
-            <View style={styles.statsGrid}>
-              <StatMiniCard
-                icon="checkmark-circle"
-                label="Rapports finalisés"
-                value={calculateDetailedStats.finalizedReports}
-                theme={theme}
-                index={1}
-                accentColor="#34C759"
-              />
-              <StatMiniCard
-                icon="create-outline"
-                label="Brouillons en cours"
-                value={calculateDetailedStats.draftReports}
-                theme={theme}
-                index={2}
-                accentColor="#FF9500"
-              />
-            </View>
-
-            <View style={styles.statsGrid}>
-              <StatMiniCard
-                icon="people"
-                label="Patients uniques"
-                value={calculateDetailedStats.newPatientsThisWeek}
-                theme={theme}
-                index={3}
-                accentColor="#5AC8FA"
-              />
-            </View>
-
-          </View>
-        )}
-
-
-        {/* Section Rapports récents */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Rapports récents</Text>
-            {filteredRecentReports.length > 0 && (
-              <TouchableOpacity
-                onPress={() => router.push('/(tabs)/rapports' as any)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.seeAllText}>Tout voir</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Filtres par statut */}
-          <View style={styles.filterContainer}>
-            {(['all', 'final', 'draft', 'trash'] as const).map((status) => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.filterChip,
-                  { 
-                    backgroundColor: statusFilter === status ? theme.colors.primary : theme.colors.backgroundCard,
-                    borderColor: statusFilter === status ? theme.colors.primary : theme.colors.border,
-                  },
-                ]}
-                onPress={() => setStatusFilter(status)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    { 
-                      color: statusFilter === status ? theme.colors.backgroundCard : theme.colors.textSecondary,
-                    },
-                  ]}
-                >
-                  {status === 'all'
-                    ? 'Tous'
-                    : status === 'final'
-                    ? 'Finalisés'
-                    : status === 'draft'
-                    ? 'Brouillons'
-                    : 'Corbeille'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {isLoadingNotes ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Chargement...</Text>
-            </View>
-          ) : filteredRecentReports.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIconContainer, { backgroundColor: theme.colors.backgroundCard }]}>
-                <Ionicons name="document-text-outline" size={64} color={theme.colors.textMuted} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-                {statusFilter === 'all'
-                  ? 'Aucun rapport récent'
-                  : `Aucun rapport ${statusFilter === 'final' ? 'finalisé' : statusFilter === 'draft' ? 'en brouillon' : 'dans la corbeille'}`}
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.textMuted, marginTop: Spacing.md }]}>
+                Chargement des statistiques...
               </Text>
-              <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>Créez votre première dictée</Text>
             </View>
           ) : (
-            <View style={styles.cardsList}>
-              {filteredRecentReports.map((report, index) => (
-                <ReportCard
-                  key={report.id}
-                  report={report}
-                  onPress={() => handleReportPress(report)}
-                  index={index}
-                  showPatientName={true}
+            <View style={[styles.recentStatsSection, {
+              backgroundColor: '#FFFFFF', // Blanc pur selon Design System - plus visible
+              borderColor: theme.colors.borderCard,
+            }]}>
+              <View style={styles.recentStatsHeader}>
+                <View style={styles.recentStatsTitleRow}>
+                  <View style={[styles.recentStatsIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                    <Ionicons name="stats-chart" size={18} color={theme.colors.primary} />
+                  </View>
+                  <View style={styles.recentStatsTitleContainer}>
+                    <Text style={[styles.recentStatsTitle, { color: theme.colors.text }]}>
+                      Statistiques récentes
+                    </Text>
+                    <Text style={[styles.recentStatsSubtitle, { color: theme.colors.textMuted }]}>
+                      Synthèse de vos activités de dictée
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Card Total rapports - Pleine largeur en haut */}
+              <View style={styles.fullWidthCardContainer}>
+                <StatMiniCard
+                  icon="calendar"
+                  label="Total des rapports"
+                  value={calculateDetailedStats.reportsThisWeek}
+                  theme={theme}
+                  index={0}
+                  accentColor={theme.colors.primary}
+                  fullWidth={true}
                 />
-              ))}
+              </View>
+
+              {/* Mini-cards de statistiques - Alignées 2 par 2 */}
+              <View style={styles.statsGrid}>
+                <StatMiniCard
+                  icon="checkmark-circle"
+                  label="Rapports finalisés"
+                  value={calculateDetailedStats.finalizedReports}
+                  theme={theme}
+                  index={1}
+                  accentColor="#34C759"
+                />
+                <StatMiniCard
+                  icon="create-outline"
+                  label="Brouillons en cours"
+                  value={calculateDetailedStats.draftReports}
+                  theme={theme}
+                  index={2}
+                  accentColor="#FF9500"
+                />
+              </View>
+
+              <View style={styles.statsGrid}>
+                <StatMiniCard
+                  icon="people"
+                  label="Patients uniques"
+                  value={calculateDetailedStats.newPatientsThisWeek}
+                  theme={theme}
+                  index={3}
+                  accentColor="#5AC8FA"
+                />
+              </View>
+
             </View>
           )}
-        </View>
-      </ScrollView>
 
-      <PatientSelectionModal
-        visible={showPatientModal}
-        onClose={() => setShowPatientModal(false)}
-        onSelect={handlePatientSelected}
-      />
-    </SafeAreaView>
+
+          {/* Section Rapports récents */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Rapports récents</Text>
+              {filteredRecentReports.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/(tabs)/rapports' as any)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.seeAllText}>Tout voir</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Filtres par statut */}
+            <View style={styles.filterContainer}>
+              {(['all', 'final', 'draft', 'trash'] as const).map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: statusFilter === status ? theme.colors.primary : theme.colors.backgroundCard,
+                      borderColor: statusFilter === status ? theme.colors.primary : theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => setStatusFilter(status)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      {
+                        color: statusFilter === status ? theme.colors.backgroundCard : theme.colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {status === 'all'
+                      ? 'Tous'
+                      : status === 'final'
+                        ? 'Finalisés'
+                        : status === 'draft'
+                          ? 'Brouillons'
+                          : 'Corbeille'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {isLoadingNotes ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Chargement...</Text>
+              </View>
+            ) : filteredRecentReports.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <View style={[styles.emptyIconContainer, { backgroundColor: theme.colors.backgroundCard }]}>
+                  <Ionicons name="document-text-outline" size={64} color={theme.colors.textMuted} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                  {statusFilter === 'all'
+                    ? 'Aucun rapport récent'
+                    : `Aucun rapport ${statusFilter === 'final' ? 'finalisé' : statusFilter === 'draft' ? 'en brouillon' : 'dans la corbeille'}`}
+                </Text>
+                <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>Créez votre première dictée</Text>
+              </View>
+            ) : (
+              <View style={styles.cardsList}>
+                {filteredRecentReports.map((report, index) => (
+                  <ReportCard
+                    key={report.id}
+                    report={report}
+                    onPress={() => handleReportPress(report)}
+                    index={index}
+                    showPatientName={true}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        </ScrollView>
+
+        <PatientSelectionModal
+          visible={showPatientModal}
+          onClose={() => setShowPatientModal(false)}
+          onSelect={handlePatientSelected}
+        />
+      </SafeAreaView>
     </Animated.View>
   );
 }
@@ -1196,9 +1255,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   subtitle: {
+    ...Typography.body, // 16px, 400 weight selon Design System
     fontSize: 16,
     fontWeight: '400',
     marginTop: Spacing.xs,
+    lineHeight: 24,
   },
   avatarContainer: {
     width: 56,
@@ -1231,30 +1292,30 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     fontWeight: '600',
   },
-  // Section Statistiques récentes premium - Design épuré
+  // Section Statistiques récentes premium - Design épuré selon Design System
   recentStatsSection: {
-    borderRadius: BorderRadius.card,
-    padding: Spacing.cardPadding,
-    marginBottom: Spacing.section,
-    marginHorizontal: Spacing.screenPadding,
+    borderRadius: BorderRadius.card, // 20px selon Design System
+    padding: Spacing.md, // 12px - réduit de 20px
+    marginBottom: Spacing.lg, // 16px - réduit de 32px
+    marginHorizontal: Spacing.screenPadding, // 24px selon Design System
     borderWidth: 1,
     overflow: 'hidden',
-    ...Shadows.card,
-    backgroundColor: '#FFFFFF',
+    ...Shadows.lg, // Ombre plus visible selon Design System
+    backgroundColor: '#FFFFFF', // Blanc pur selon Design System
     // borderColor appliqué dynamiquement
   },
   recentStatsHeader: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.sm, // 8px - réduit de 12px
   },
   recentStatsTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.md, // 12px
   },
   recentStatsIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40, // Réduit de 48px
+    height: 40,
+    borderRadius: BorderRadius.badge, // 12px selon Design System
     justifyContent: 'center',
     alignItems: 'center',
     // backgroundColor appliqué dynamiquement
@@ -1263,20 +1324,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   recentStatsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    marginBottom: 2,
+    ...Typography.subtitle, // 18px, 500 weight selon Design System
+    fontSize: 16, // Réduit de 18px
+    fontWeight: '600', // Semi-bold pour titre de section
+    letterSpacing: -0.1,
+    marginBottom: 0, // Supprimé
     // color appliqué dynamiquement
   },
   recentStatsSubtitle: {
-    fontSize: 12,
+    ...Typography.caption, // 12px, 400 weight selon Design System
+    fontSize: 11, // Réduit de 12px
     fontWeight: '400',
+    letterSpacing: 0.2,
+    marginTop: 2, // Petit espacement
     // color appliqué dynamiquement
   },
   fullWidthCardContainer: {
     width: '100%',
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.xs / 2, // Réduit de Spacing.xs
   },
   fullWidthCard: {
     width: '100%',
@@ -1285,44 +1350,47 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     gap: Spacing.xs,
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.xs / 2, // Réduit de Spacing.xs
     paddingHorizontal: 0,
   },
   statMiniCard: {
     flex: 1,
-    borderRadius: BorderRadius.card,
-    padding: Spacing.lg,
+    borderRadius: BorderRadius.card, // 20px selon Design System
+    padding: Spacing.md, // 12px - réduit de 20px
     borderWidth: 1,
-    minHeight: 120,
-    ...Shadows.md,
-    backgroundColor: '#FFFFFF',
+    minHeight: 100, // Réduit de 140px
+    ...Shadows.lg, // Ombre plus visible selon Design System
+    backgroundColor: '#FFFFFF', // Blanc pur selon Design System
     // borderColor appliqué dynamiquement
   },
   statMiniCardContent: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    gap: Spacing.xs, // Réduit de Spacing.sm
   },
   statMiniIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36, // Réduit de 48px
+    height: 36,
+    borderRadius: BorderRadius.badge, // 12px selon Design System
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: Spacing.xs, // Réduit de Spacing.md
     // backgroundColor appliqué dynamiquement
   },
   statMiniValue: {
-    fontSize: 22,
+    ...Typography.number, // 28px, 700 weight selon Design System
+    fontSize: 24, // Réduit de 28px
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: 0, // Supprimé
     letterSpacing: -0.5,
     textAlign: 'center',
     width: '100%',
     // color appliqué dynamiquement
   },
   statMiniLabel: {
-    fontSize: 12,
+    ...Typography.labelSmall, // 13px, 500 weight selon Design System
+    fontSize: 12, // Réduit de 13px
     fontWeight: '500',
     textAlign: 'center',
     letterSpacing: 0.1,

@@ -16,9 +16,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  Image,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -26,11 +25,12 @@ import { patientsApiService, Patient, CreatePatientData } from '@/services/patie
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeIn, slideUp, inputFocus, inputBlur, ANIMATION_DURATION } from '@/utils/animations';
+import ModernHeader from '@/components/ModernHeader';
+import { Spacing, Typography, BorderRadius, Shadows } from '@/constants/design';
 
 export default function PatientDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -192,86 +192,24 @@ export default function PatientDetailScreen() {
     >
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
 
-      {/* Header avec logo KadduCare */}
-      <View
-        style={[
-          styles.appHeader, 
-          { 
-            backgroundColor: theme.colors.backgroundCard,
-            borderBottomColor: theme.colors.border,
-            paddingTop: insets.top + 8,
-          }
-        ]}
-      >
-        <View style={styles.appHeaderContent}>
-          <View style={styles.appLogoContainer}>
-            <Image 
-              source={require('@/assets/images/logo-kadducare.png')} 
-              style={styles.appLogo}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={[styles.appName, { color: theme.colors.text }]}>KadduCare</Text>
-        </View>
-      </View>
-
-      {/* Header moderne et élégant */}
-      <View
-        style={[
-          styles.headerGradient, 
-          { 
-            backgroundColor: theme.colors.backgroundCard,
-            borderBottomColor: theme.colors.border,
-          }
-        ]}
-      >
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButtonHeader}
-            onPress={() => router.back()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <View style={[styles.backButtonCircle, { 
-              backgroundColor: theme.colors.backgroundCard,
-              borderColor: theme.colors.border,
-            }]}>
-              <Ionicons name="arrow-back" size={20} color={theme.colors.primary} />
-            </View>
-          </TouchableOpacity>
-          
-          <View style={styles.headerTitleContainer}>
-            <View style={[styles.headerIconContainer, { backgroundColor: theme.colors.primary }]}>
-              <Ionicons name="person" size={16} color="#FFFFFF" />
-            </View>
-            <View style={styles.headerTextWrapper}>
-              <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                {patient.full_name}
-              </Text>
-              <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]} numberOfLines={1}>
-                {hasChanges ? 'Modifications en cours' : 'Informations personnelles'}
-              </Text>
-            </View>
-          </View>
-          
-          {hasChanges && (
-            <TouchableOpacity
-              style={styles.saveHeaderButton}
-              onPress={handleSave}
-              disabled={isSaving}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <View style={[styles.saveHeaderButtonCircle, { backgroundColor: theme.colors.success }]}>
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
-          {!hasChanges && <View style={styles.editButton} />}
-        </View>
-      </View>
+      {/* Header moderne selon Design System KadduCare */}
+      <ModernHeader
+        title={patient.full_name}
+        subtitle={hasChanges ? 'Modifications en cours' : 'Informations personnelles'}
+        icon="person"
+        showBackButton={true}
+        onBackPress={() => router.back()}
+        rightAction={
+          hasChanges
+            ? {
+                icon: 'checkmark',
+                onPress: handleSave,
+                disabled: isSaving,
+                loading: isSaving,
+              }
+            : undefined
+        }
+      />
       
       <SafeAreaView style={[styles.contentContainer, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
         <KeyboardAvoidingView
@@ -586,118 +524,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  // Header app avec logo KadduCare
-  appHeader: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    // backgroundColor et borderBottomColor appliqués dynamiquement
-  },
-  appHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  appLogoContainer: {
-    width: 60,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appLogo: {
-    width: '100%',
-    height: '100%',
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    // color appliqué dynamiquement
-  },
-  headerGradient: {
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    // backgroundColor et borderBottomColor appliqués dynamiquement
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 56,
-  },
-  backButtonHeader: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backButtonCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    // backgroundColor et borderColor appliqués dynamiquement
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-  },
-  headerTextWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  headerIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-    // backgroundColor appliqué dynamiquement
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 2,
-    textAlign: 'center',
-    letterSpacing: -0.3,
-    maxWidth: '100%',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-    maxWidth: '100%',
-  },
-  editButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveHeaderButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveHeaderButtonCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    // backgroundColor appliqué dynamiquement
   },
   keyboardView: {
     flex: 1,

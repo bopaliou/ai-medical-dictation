@@ -1,0 +1,179 @@
+{
+  "fontFamily": {
+    "primary": "System (San Francisco on iOS, Roboto on Android)",
+    "fallback": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto",
+    "recommendation": "Use system font for best performance and native integration"
+  },
+  "hierarchy": {
+    "h1": {
+      "name": "Heading 1",
+      "fontSize": 32,
+      "fontWeight": "700",
+      "lineHeight": 40,
+      "letterSpacing": -0.8,
+      "usage": "Titres d'écran principaux, headers de modals"
+    },
+    "h2": {
+      "name": "Heading 2",
+      "fontSize": 28,
+      "fontWeight": "700",
+      "lineHeight": 36,
+      "letterSpacing": -0.5,
+      "usage": "Sous-titres de sections, titres de cartes importantes"
+    },
+    "h3": {
+      "name": "Heading 3",
+      "fontSize": 24,
+      "fontWeight": "600",
+      "lineHeight": 32,
+      "letterSpacing": -0.3,
+      "usage": "Titres de sous-sections, titres de cartes"
+    },
+    "h4": {
+      "name": "Heading 4",
+      "fontSize": 20,
+      "fontWeight": "600",
+      "lineHeight": 28,
+      "letterSpacing": -0.2,
+      "usage": "Titres de petits éléments, labels de groupes"
+    },
+    "subtitle": {
+      "name": "Subtitle",
+      "fontSize": 18,
+      "fontWeight": "500",
+      "lineHeight": 26,
+      "letterSpacing": -0.1,
+      "usage": "Sous-titres de sections, descriptions importantes"
+    },
+    "subtitleSmall": {
+      "name": "Subtitle Small",
+      "fontSize": 16,
+      "fontWeight": "500",
+      "lineHeight": 24,
+      "letterSpacing": 0,
+      "usage": "Sous-titres compacts, descriptions secondaires"
+    },
+    "body": {
+      "name": "Body",
+      "fontSize": 16,
+      "fontWeight": "400",
+      "lineHeight": 24,
+      "letterSpacing": 0,
+      "usage": "Paragraphes principaux, contenu de cartes",
+      "minSize": true,
+      "note": "Minimum size for optimal readability"
+    },
+    "bodySmall": {
+      "name": "Body Small",
+      "fontSize": 15,
+      "fontWeight": "400",
+      "lineHeight": 22,
+      "letterSpacing": 0,
+      "usage": "Textes secondaires, descriptions courtes"
+    },
+    "bodyTiny": {
+      "name": "Body Tiny",
+      "fontSize": 14,
+      "fontWeight": "400",
+      "lineHeight": 20,
+      "letterSpacing": 0.1,
+      "usage": "Textes très compacts, informations discrètes"
+    },
+    "label": {
+      "name": "Label",
+      "fontSize": 14,
+      "fontWeight": "600",
+      "lineHeight": 20,
+      "letterSpacing": 0.1,
+      "usage": "Labels de champs, textes de boutons, étiquettes",
+      "minSize": true
+    },
+    "labelSmall": {
+      "name": "Label Small",
+      "fontSize": 13,
+      "fontWeight": "500",
+      "lineHeight": 18,
+      "letterSpacing": 0.1,
+      "usage": "Labels compacts, textes de petits boutons"
+    },
+    "caption": {
+      "name": "Caption",
+      "fontSize": 12,
+      "fontWeight": "400",
+      "lineHeight": 16,
+      "letterSpacing": 0.2,
+      "usage": "Captions d'images, métadonnées, textes d'aide",
+      "minSize": true,
+      "note": "Minimum size with high contrast required"
+    },
+    "captionSmall": {
+      "name": "Caption Small",
+      "fontSize": 11,
+      "fontWeight": "400",
+      "lineHeight": 14,
+      "letterSpacing": 0.2,
+      "usage": "Captions très petits, timestamps, informations minimales"
+    },
+    "number": {
+      "name": "Number",
+      "fontSize": 28,
+      "fontWeight": "700",
+      "lineHeight": 34,
+      "letterSpacing": -0.5,
+      "usage": "Statistiques, chiffres importants, compteurs"
+    },
+    "numberLarge": {
+      "name": "Number Large",
+      "fontSize": 36,
+      "fontWeight": "800",
+      "lineHeight": 44,
+      "letterSpacing": -0.8,
+      "usage": "Statistiques principales, chiffres très importants"
+    }
+  },
+  "spacing": {
+    "betweenTitleAndSubtitle": 4,
+    "betweenTitleAndParagraph": 12,
+    "betweenParagraphs": 16
+  },
+  "lineLength": {
+    "mobile": {
+      "optimal": "280-320px",
+      "characters": "50-60 characters"
+    },
+    "tablet": {
+      "optimal": "400-500px",
+      "characters": "65-75 characters"
+    }
+  },
+  "contrast": {
+    "standard": {
+      "minimum": "4.5:1",
+      "level": "WCAG AA",
+      "usage": "Texte normal"
+    },
+    "large": {
+      "minimum": "3:1",
+      "level": "WCAG AA",
+      "usage": "Texte large (18px+)"
+    },
+    "important": {
+      "minimum": "7:1",
+      "level": "WCAG AAA",
+      "usage": "Texte important"
+    }
+  },
+  "accessibility": {
+    "minSizes": {
+      "body": 16,
+      "label": 14,
+      "caption": 12
+    },
+    "weights": {
+      "important": "600-700",
+      "normal": "400",
+      "discrete": "400 with reduced opacity"
+    }
+  }
+}
+

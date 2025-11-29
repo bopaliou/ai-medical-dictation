@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Report } from '@/services/reportApi';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fadeSlideUp, scalePress, scaleRelease, getCascadeDelay, ANIMATION_DURATION } from '@/utils/animations';
+import { Spacing, BorderRadius, Shadows, Typography } from '@/constants/design';
 
 interface ReportCardProps {
   report: Report;
@@ -411,20 +412,17 @@ export default function ReportCard({
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    marginHorizontal: 20,
-    marginBottom: 12,
+    marginHorizontal: Spacing.screenPadding, // 24px selon Design System
+    marginBottom: Spacing.lg, // 16px selon Design System
   },
   reportCard: {
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: BorderRadius.card, // 20px selon Design System
+    padding: Spacing.cardPadding, // 20px selon Design System
     flexDirection: 'row',
     alignItems: 'stretch',
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    ...Shadows.lg, // Ombre plus visible selon Design System
+    backgroundColor: '#FFFFFF', // Blanc pur selon Design System
   },
   cardContent: {
     flex: 1,
@@ -446,44 +444,47 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: Spacing.sm, // 8px
+    paddingVertical: 6,
+    borderRadius: BorderRadius.badge, // 12px selon Design System
+    gap: Spacing.xs, // 4px
     alignSelf: 'flex-start',
   },
   statusText: {
+    ...Typography.captionSmall, // 11px, 400 weight selon Design System
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.1,
+    fontWeight: '600', // Semi-bold pour badges
+    letterSpacing: 0.2,
   },
   pdfIndicatorSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing.xs, // 4px
     paddingHorizontal: 7,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: BorderRadius.badge, // 12px selon Design System
     alignSelf: 'flex-start',
   },
   pdfTextSmall: {
+    ...Typography.captionSmall, // 11px selon Design System
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   cardTitle: {
+    ...Typography.h4, // 20px, 600 weight selon Design System
     fontSize: 17,
     fontWeight: '700',
     lineHeight: 24,
-    letterSpacing: -0.3,
-    marginBottom: 12,
+    letterSpacing: -0.2,
+    marginBottom: Spacing.md, // 12px
   },
   patientInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    marginBottom: Spacing.md, // 12px
+    paddingVertical: Spacing.sm + 2, // 10px
+    paddingHorizontal: Spacing.md, // 12px
+    borderRadius: BorderRadius.input, // 12px selon Design System
     borderWidth: 1,
   },
   patientIconWrapper: {
@@ -500,10 +501,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   patientName: {
+    ...Typography.bodySmall, // 15px, 400 weight selon Design System
     fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.2,
+    fontWeight: '600', // Semi-bold pour nom
+    marginBottom: Spacing.sm, // 8px
+    letterSpacing: -0.1,
   },
   patientMeta: {
     flexDirection: 'row',
@@ -517,22 +519,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   patientMetaText: {
+    ...Typography.caption, // 12px, 400 weight selon Design System
     fontSize: 12,
     fontWeight: '500',
   },
   vitalsSection: {
-    marginBottom: 12,
+    marginBottom: Spacing.md, // 12px
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+    gap: Spacing.xs + 2, // 6px
+    marginBottom: Spacing.sm + 2, // 10px
   },
   sectionTitle: {
+    ...Typography.labelSmall, // 13px, 500 weight selon Design System
     fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontWeight: '600', // Semi-bold pour titre de section
+    letterSpacing: 0.1,
   },
   vitalsGrid: {
     flexDirection: 'row',
@@ -547,25 +551,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: Spacing.md, // 12px
+    paddingVertical: Spacing.sm, // 8px
+    borderRadius: BorderRadius.input, // 12px selon Design System (arrondi à 10px pour cohérence)
     borderWidth: 1,
     width: '48%',
-    marginBottom: 10,
+    marginBottom: Spacing.sm + 2, // 10px
   },
   vitalValue: {
+    ...Typography.labelSmall, // 13px, 500 weight selon Design System
     fontSize: 13,
     fontWeight: '600',
-    letterSpacing: -0.1,
+    letterSpacing: 0.1,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: Spacing.md, // 12px
     borderTopWidth: 1,
-    marginTop: 4,
+    marginTop: Spacing.xs, // 4px
   },
   cardDateContainer: {
     flexDirection: 'row',
@@ -573,6 +578,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   cardDate: {
+    ...Typography.caption, // 12px, 400 weight selon Design System
     fontSize: 12,
     fontWeight: '500',
   },

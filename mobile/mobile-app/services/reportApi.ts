@@ -6,6 +6,7 @@ import axios, { AxiosError } from 'axios';
 import { API_CONFIG } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { handleTokenExpiration, isTokenExpiredError } from '../utils/authInterceptor';
+import { rateLimiter } from '../utils/rateLimiter';
 
 export interface SOAPIEStructure {
   S?: string; // Subjective (Motif de consultation)
@@ -209,67 +210,75 @@ class ReportApiService {
    * @param {number} options.offset - Offset pour la pagination
    */
   async getReports(options?: { status?: string; limit?: number; offset?: number }): Promise<GetReportsResponse> {
-    try {
-      const token = await this.getAuthToken();
-      if (!token) {
-        throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
-      }
-
-      const params = new URLSearchParams();
-      if (options?.status) params.append('status', options.status);
-      if (options?.limit) params.append('limit', options.limit.toString());
-      if (options?.offset) params.append('offset', options.offset.toString());
-
-      const url = `${this.baseURL}/api/reports${params.toString() ? `?${params.toString()}` : ''}`;
-
-      console.log('📋 Récupération des rapports:', url);
-
-      const response = await axios.get<GetReportsResponse>(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      }).catch((error) => {
-        if (error.response?.status === 401) {
-          console.error('❌ Erreur 401 lors de la récupération des rapports');
-          if (isTokenExpiredError(error)) {
-            handleTokenExpiration();
-            throw new Error('Session expirée. Veuillez vous reconnecter.');
+    const requestKey = `getReports_${options?.status || 'all'}_${options?.limit || 'default'}`;
+    
+    // Utiliser debounce pour éviter les requêtes multiples
+    return rateLimiter.debounce(requestKey, async () => {
+      // Retry avec backoff pour les erreurs 429
+      return rateLimiter.retryWithBackoff(async () => {
+        try {
+          const token = await this.getAuthToken();
+          if (!token) {
+            throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
           }
+
+          const params = new URLSearchParams();
+          if (options?.status) params.append('status', options.status);
+          if (options?.limit) params.append('limit', options.limit.toString());
+          if (options?.offset) params.append('offset', options.offset.toString());
+
+          const url = `${this.baseURL}/api/reports${params.toString() ? `?${params.toString()}` : ''}`;
+
+          console.log('📋 Récupération des rapports:', url);
+
+          const response = await axios.get<GetReportsResponse>(url, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          }).catch((error) => {
+            if (error.response?.status === 401) {
+              console.error('❌ Erreur 401 lors de la récupération des rapports');
+              if (isTokenExpiredError(error)) {
+                handleTokenExpiration();
+                throw new Error('Session expirée. Veuillez vous reconnecter.');
+              }
+            }
+            throw error;
+          });
+
+          if (response.data.ok) {
+            return response.data;
+          }
+
+          throw new Error('Échec de la récupération des rapports');
+        } catch (error: any) {
+          console.error('❌ Erreur lors de la récupération des rapports:', error);
+
+          if (axios.isAxiosError(error)) {
+            const axiosError = error as AxiosError<{ error: string; message?: string }>;
+            
+            // Erreur réseau (backend inaccessible)
+            if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+              const errorMessage = `Impossible de se connecter au serveur.\n\n` +
+                `Vérifiez que :\n` +
+                `• Le backend est démarré (port 3000)\n` +
+                `• Votre appareil est sur le même réseau WiFi\n` +
+                `• L'IP dans app.json correspond à votre ordinateur\n` +
+                `\nURL configurée : ${this.baseURL}`;
+              throw new Error(errorMessage);
+            }
+            
+            if (axiosError.response?.status === 404) {
+              throw new Error('Endpoint des rapports non trouvé. Vérifiez la configuration du backend.');
+            }
+          }
+
+          throw error instanceof Error ? error : new Error('Erreur lors de la récupération des rapports');
         }
-        throw error;
-      });
-
-      if (response.data.ok) {
-        return response.data;
-      }
-
-      throw new Error('Échec de la récupération des rapports');
-    } catch (error: any) {
-      console.error('❌ Erreur lors de la récupération des rapports:', error);
-
-      if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError<{ error: string; message?: string }>;
-        
-        // Erreur réseau (backend inaccessible)
-        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-          const errorMessage = `Impossible de se connecter au serveur.\n\n` +
-            `Vérifiez que :\n` +
-            `• Le backend est démarré (port 3000)\n` +
-            `• Votre appareil est sur le même réseau WiFi\n` +
-            `• L'IP dans app.json correspond à votre ordinateur\n` +
-            `\nURL configurée : ${this.baseURL}`;
-          throw new Error(errorMessage);
-        }
-        
-        if (axiosError.response?.status === 404) {
-          throw new Error('Endpoint des rapports non trouvé. Vérifiez la configuration du backend.');
-        }
-      }
-
-      throw error instanceof Error ? error : new Error('Erreur lors de la récupération des rapports');
-    }
+      }, 3, 1000); // 3 tentatives avec délai initial de 1s
+    }, 500); // Debounce de 500ms
   }
 
   /**

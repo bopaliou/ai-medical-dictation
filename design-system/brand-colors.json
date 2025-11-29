@@ -1,0 +1,223 @@
+{
+  "primary": {
+    "name": "KadduCare Blue",
+    "value": "#0A84FF",
+    "rgb": "rgb(10, 132, 255)",
+    "hsl": "hsl(211, 100%, 52%)",
+    "usage": "Couleur principale de la marque, boutons principaux, liens actifs",
+    "variants": {
+      "light": {
+        "name": "Primary Light",
+        "value": "#E8F1FF",
+        "usage": "Backgrounds, accents légers"
+      },
+      "dark": {
+        "name": "Primary Dark",
+        "value": "#0051D5",
+        "usage": "Contrastes, profondeur"
+      }
+    },
+    "gradient": {
+      "colors": ["#0A84FF", "#0051D5"],
+      "usage": "Dégradé bleu KadduCare pour éléments premium"
+    }
+  },
+  "success": {
+    "name": "Health Green",
+    "value": "#34C759",
+    "rgb": "rgb(52, 199, 89)",
+    "hsl": "hsl(142, 61%, 49%)",
+    "usage": "Validations, statuts positifs, statuts finalisés",
+    "variants": {
+      "light": {
+        "name": "Success Light",
+        "value": "#E8F5E9",
+        "usage": "Backgrounds"
+      },
+      "dark": {
+        "name": "Success Dark",
+        "value": "#28A745",
+        "usage": "Contrastes"
+      }
+    }
+  },
+  "error": {
+    "name": "Error Red",
+    "value": "#FF3B30",
+    "rgb": "rgb(255, 59, 48)",
+    "hsl": "hsl(4, 100%, 59%)",
+    "usage": "Erreurs, actions destructives, statuts corbeille",
+    "variants": {
+      "light": {
+        "name": "Error Light",
+        "value": "#FFEBEE",
+        "usage": "Backgrounds"
+      }
+    }
+  },
+  "warning": {
+    "name": "Warning Orange",
+    "value": "#FF9500",
+    "rgb": "rgb(255, 149, 0)",
+    "hsl": "hsl(33, 100%, 50%)",
+    "usage": "Avertissements, statuts brouillon",
+    "variants": {
+      "light": {
+        "name": "Warning Light",
+        "value": "#FFF3E0",
+        "usage": "Backgrounds"
+      }
+    }
+  },
+  "backgrounds": {
+    "primary": {
+      "name": "Background",
+      "value": "#F5F5F7",
+      "usage": "Fond principal de l'application"
+    },
+    "card": {
+      "name": "Background Card",
+      "value": "#FFFFFF",
+      "usage": "Blanc pur pour cartes et éléments élevés"
+    },
+    "secondary": {
+      "name": "Background Secondary",
+      "value": "#FAFAFA",
+      "usage": "Gris très clair pour séparations"
+    },
+    "elevated": {
+      "name": "Background Elevated",
+      "value": "#FFFFFF",
+      "usage": "Blanc pour éléments élevés"
+    }
+  },
+  "text": {
+    "primary": {
+      "name": "Text",
+      "value": "#1B1B1D",
+      "contrast": "16.5:1 (WCAG AAA)",
+      "usage": "Texte principal, excellent contraste"
+    },
+    "secondary": {
+      "name": "Text Secondary",
+      "value": "#4A4A4A",
+      "contrast": "7.1:1 (WCAG AAA)",
+      "usage": "Sous-textes, informations secondaires"
+    },
+    "muted": {
+      "name": "Text Muted",
+      "value": "#8E8E93",
+      "contrast": "4.5:1 (WCAG AA)",
+      "usage": "Textes discrets, métadonnées"
+    },
+    "light": {
+      "name": "Text Light",
+      "value": "#C7C7CC",
+      "usage": "Textes très discrets"
+    }
+  },
+  "borders": {
+    "standard": {
+      "name": "Border",
+      "value": "#E5E5EA",
+      "usage": "Bordure standard pour séparations"
+    },
+    "light": {
+      "name": "Border Light",
+      "value": "#F0F0F0",
+      "usage": "Bordure très légère"
+    },
+    "card": {
+      "name": "Border Card",
+      "value": "#E5E5EA",
+      "usage": "Bordure pour cartes"
+    }
+  },
+  "status": {
+    "draft": {
+      "name": "Draft",
+      "value": "#8E8E93",
+      "usage": "Gris pour brouillons"
+    },
+    "final": {
+      "name": "Final",
+      "value": "#34C759",
+      "usage": "Vert KadduCare pour finalisé"
+    },
+    "trash": {
+      "name": "Trash",
+      "value": "#FF3B30",
+      "usage": "Rouge pour corbeille"
+    }
+  },
+  "dark": {
+    "backgrounds": {
+      "primary": {
+        "name": "Background Dark",
+        "value": "#0D0D0F",
+        "usage": "Fond principal mode sombre"
+      },
+      "card": {
+        "name": "Background Card Dark",
+        "value": "#161618",
+        "usage": "Fond carte mode sombre"
+      },
+      "secondary": {
+        "name": "Background Secondary Dark",
+        "value": "#1A1A1D",
+        "usage": "Fond secondaire mode sombre"
+      },
+      "elevated": {
+        "name": "Background Elevated Dark",
+        "value": "#1C1C1E",
+        "usage": "Fond élevé mode sombre"
+      }
+    },
+    "text": {
+      "primary": {
+        "name": "Text Dark",
+        "value": "#F2F2F3",
+        "contrast": "16.5:1 (WCAG AAA)",
+        "usage": "Texte principal mode sombre"
+      },
+      "secondary": {
+        "name": "Text Secondary Dark",
+        "value": "#C7C7C9",
+        "usage": "Texte secondaire mode sombre"
+      },
+      "muted": {
+        "name": "Text Muted Dark",
+        "value": "#8E8E93",
+        "usage": "Texte discret mode sombre"
+      },
+      "light": {
+        "name": "Text Light Dark",
+        "value": "#6B6B6E",
+        "usage": "Texte très discret mode sombre"
+      }
+    },
+    "borders": {
+      "standard": {
+        "name": "Border Dark",
+        "value": "#2A2A2D",
+        "usage": "Bordure standard mode sombre"
+      },
+      "light": {
+        "name": "Border Light Dark",
+        "value": "#1F1F22",
+        "usage": "Bordure légère mode sombre"
+      },
+      "card": {
+        "name": "Border Card Dark",
+        "value": "#3A3A3D",
+        "usage": "Bordure carte mode sombre"
+      }
+    }
+  },
+  "overlay": {
+    "name": "Overlay",
+    "value": "rgba(0, 0, 0, 0.4)",
+    "usage": "Overlay pour modals et popups"
+  }
+}
+
