@@ -29,6 +29,7 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
   const shadowOpacityAnim = React.useRef(new Animated.Value(0.3)).current;
   const isAnimating = React.useRef(false);
+  const shadowAnimRef = React.useRef<Animated.CompositeAnimation | null>(null);
 
   // Animation d'apparition premium : fade + scale
   useEffect(() => {
@@ -83,22 +84,37 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
     });
     
     // Animation de l'ombre (subtile) - doit être arrêtée proprement
-    shadowOpacityAnim.stopAnimation((value) => {
-      const currentShadowValue = value !== undefined ? value : 0.3;
-      shadowOpacityAnim.setValue(currentShadowValue);
-      
-      Animated.sequence([
-        Animated.timing(shadowOpacityAnim, {
-          toValue: 0.5,
-          duration: ANIMATION_DURATION.FAB / 2,
-          useNativeDriver: false,
-        }),
-        Animated.timing(shadowOpacityAnim, {
-          toValue: 0.3,
-          duration: ANIMATION_DURATION.FAB / 2,
-          useNativeDriver: false,
-        }),
-      ]).start();
+    // Arrêter l'animation précédente si elle existe
+    if (shadowAnimRef.current) {
+      shadowAnimRef.current.stop();
+      shadowAnimRef.current = null;
+    }
+    
+    // Récupérer la valeur actuelle sans callback pour éviter les conflits
+    let currentShadowValue = 0.3;
+    shadowOpacityAnim.stopAnimation();
+    
+    // Utiliser setValue directement après avoir arrêté l'animation
+    shadowOpacityAnim.setValue(currentShadowValue);
+    
+    // Créer la nouvelle animation
+    const shadowAnimation = Animated.sequence([
+      Animated.timing(shadowOpacityAnim, {
+        toValue: 0.5,
+        duration: ANIMATION_DURATION.FAB / 2,
+        useNativeDriver: false,
+      }),
+      Animated.timing(shadowOpacityAnim, {
+        toValue: 0.3,
+        duration: ANIMATION_DURATION.FAB / 2,
+        useNativeDriver: false,
+      }),
+    ]);
+    
+    // Stocker la référence de l'animation
+    shadowAnimRef.current = shadowAnimation;
+    shadowAnimation.start(() => {
+      shadowAnimRef.current = null;
     });
 
     if (onPress) {
@@ -147,7 +163,7 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
           },
         ]}
       >
-        <TouchableOpacity
+        <Animated.View
           style={[
             styles.button, 
             { 
@@ -155,16 +171,20 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
               shadowOpacity: shadowOpacityAnim,
             },
           ]}
-          onPress={handlePress}
-          activeOpacity={1}
-          accessibilityLabel="Nouvelle dictée"
-          accessibilityRole="button"
-          accessibilityHint="Démarrer une nouvelle dictée médicale"
         >
-          <View style={styles.buttonInner}>
-            <Ionicons name="mic" size={32} color={theme.colors.fabIcon} />
-          </View>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.buttonInnerTouchable}
+            onPress={handlePress}
+            activeOpacity={0.8}
+            accessibilityLabel="Nouvelle dictée"
+            accessibilityRole="button"
+            accessibilityHint="Démarrer une nouvelle dictée médicale"
+          >
+            <View style={styles.buttonInner}>
+              <Ionicons name="mic" size={32} color={theme.colors.fabIcon} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       </Animated.View>
 
       {/* Modal de sélection de patient */}
@@ -191,9 +211,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Shadows.xl,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 12,
+    // shadowOpacity sera animé dynamiquement
+  },
+  buttonInnerTouchable: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: BorderRadius.full,
   },
   buttonInner: {
     width: '100%',

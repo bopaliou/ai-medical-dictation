@@ -92,8 +92,8 @@ function StatMiniCard({ icon, label, value, theme, index, accentColor, isDate = 
   };
 
   const isLightMode = theme.resolved === 'light';
-  // Design premium selon Design System : fond blanc pur pour cartes
-  const cardBg = '#FFFFFF'; // Blanc pur selon Design System - plus visible
+  // Design premium selon Design System : fond adapté au thème
+  const cardBg = theme.colors.backgroundCard; // S'adapte automatiquement au mode dark
   const iconBg = theme.colors.primaryLight; // Primary light selon Design System - plus visible
 
   return (
@@ -1048,24 +1048,24 @@ export default function DashboardScreen() {
         >
 
           {/* Section Statistiques récentes - Premium et épurée selon Design System */}
-          {isLoadingStats ? (
-            <View style={[styles.recentStatsSection, {
-              backgroundColor: '#FFFFFF',
-              borderColor: theme.colors.borderCard,
-              minHeight: 200,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }]}>
+        {isLoadingStats ? (
+          <View style={[styles.recentStatsSection, { 
+            backgroundColor: theme.colors.backgroundCard,
+            borderColor: theme.colors.borderCard,
+            minHeight: 200,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }]}>
               <ActivityIndicator size="large" color={theme.colors.primary} />
               <Text style={[styles.loadingText, { color: theme.colors.textMuted, marginTop: Spacing.md }]}>
                 Chargement des statistiques...
               </Text>
             </View>
-          ) : (
-            <View style={[styles.recentStatsSection, {
-              backgroundColor: '#FFFFFF', // Blanc pur selon Design System - plus visible
-              borderColor: theme.colors.borderCard,
-            }]}>
+        ) : (
+          <View style={[styles.recentStatsSection, { 
+            backgroundColor: theme.colors.backgroundCard, // S'adapte automatiquement au mode dark
+            borderColor: theme.colors.borderCard,
+          }]}>
               <View style={styles.recentStatsHeader}>
                 <View style={styles.recentStatsTitleRow}>
                   <View style={[styles.recentStatsIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
@@ -1103,7 +1103,7 @@ export default function DashboardScreen() {
                   value={calculateDetailedStats.finalizedReports}
                   theme={theme}
                   index={1}
-                  accentColor="#34C759"
+                  accentColor={theme.colors.success}
                 />
                 <StatMiniCard
                   icon="create-outline"
@@ -1111,19 +1111,19 @@ export default function DashboardScreen() {
                   value={calculateDetailedStats.draftReports}
                   theme={theme}
                   index={2}
-                  accentColor="#FF9500"
+                  accentColor={theme.colors.warning}
                 />
               </View>
 
               <View style={styles.statsGrid}>
-                <StatMiniCard
-                  icon="people"
-                  label="Patients uniques"
-                  value={calculateDetailedStats.newPatientsThisWeek}
-                  theme={theme}
-                  index={3}
-                  accentColor="#5AC8FA"
-                />
+              <StatMiniCard
+                icon="people"
+                label="Patients uniques"
+                value={calculateDetailedStats.newPatientsThisWeek}
+                theme={theme}
+                index={3}
+                accentColor={theme.colors.primary}
+              />
               </View>
 
             </View>
@@ -1301,8 +1301,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     ...Shadows.lg, // Ombre plus visible selon Design System
-    backgroundColor: '#FFFFFF', // Blanc pur selon Design System
-    // borderColor appliqué dynamiquement
+    // backgroundColor et borderColor appliqués dynamiquement selon le thème
   },
   recentStatsHeader: {
     marginBottom: Spacing.sm, // 8px - réduit de 12px
@@ -1360,8 +1359,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 100, // Réduit de 140px
     ...Shadows.lg, // Ombre plus visible selon Design System
-    backgroundColor: '#FFFFFF', // Blanc pur selon Design System
-    // borderColor appliqué dynamiquement
+    // backgroundColor et borderColor appliqués dynamiquement selon le thème
   },
   statMiniCardContent: {
     alignItems: 'center',

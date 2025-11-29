@@ -1,8 +1,7 @@
 /**
- * Service de génération PDF médical premium - KadduCare
- * Design moderne, élégant et professionnel adapté aux environnements hospitaliers
- * Standards : Mayo Clinic, Meditech, Epic Systems, Johns Hopkins
- * Compatible impression A4 et consultation mobile
+ * Service de génération PDF médical KadduCare
+ * Design pixel-perfect basé sur le mockup officiel
+ * Structure : Header → Info Patient → S → O → A → P → I → E → Footer
  */
 
 const PDFDocument = require('pdfkit');
@@ -11,76 +10,57 @@ const path = require('path');
 const os = require('os');
 
 // ============================================================================
-// CONSTANTES ET CONFIGURATION DESIGN PREMIUM
+// CONFIGURATION DESIGN STRICT (Basé sur le mockup)
 // ============================================================================
 
-const MARGINS = {
-  top: 50,      // Marge supérieure pour header
-  bottom: 40,   // Marge inférieure pour footer
-  left: 40,     // Marge gauche
-  right: 40     // Marge droite
-};
+const MARGINS = { top: 0, bottom: 60, left: 40, right: 40 };
 
+// Couleurs exactes du mockup KadduCare
 const COLORS = {
-  // Palette KadduCare
-  primary: '#0A84FF',           // KadduCare Blue
-  primaryDark: '#0051D5',       // Bleu foncé pour contrastes
-  success: '#34C759',           // Vert validation
-  text: '#1B1B1D',              // Noir doux (Design System)
-  textSecondary: '#8E8E93',     // Gris secondaire
-  textMuted: '#AEAEB2',         // Gris discret
-  background: '#F2F2F7',        // Gris système iOS
-  backgroundCard: '#FFFFFF',    // Fond blanc cartes
-  backgroundAlt: '#F9F9FA',     // Fond alterné très léger
-  border: '#E5E5EA',            // Bordure fine
-  borderLight: '#F2F2F7',       // Bordure très légère
-  white: '#FFFFFF',
-
-  // Couleurs par section SOAPIE (Pastels médicaux)
-  section: {
-    s: '#EBF5FF',                // Subjectif (Bleu très pâle)
-    o: '#F0F9FF',                // Objectif (Ciel très pâle)
-    a: '#FFF9F0',                // Analyse (Orange très pâle)
-    i: '#F2FCF5',                // Intervention (Vert très pâle)
-    e: '#F5F3FF',                // Évaluation (Violet très pâle)
-    p: '#FFFBE6'                 // Plan (Jaune très pâle)
-  },
-  sectionBorder: {
-    s: '#0A84FF',
-    o: '#00C7BE',
-    a: '#FF9500',
-    i: '#34C759',
-    e: '#AF52DE',
-    p: '#FFCC00'
+  // Bleu KadduCare (bannière header)
+  primary: '#0A84FF',           // Bleu principal KadduCare
+  primaryLight: '#E8F1FF',      // Bleu très clair (fond info patient)
+  
+  // Textes
+  text: '#1B1B1D',             // Noir principal
+  textSecondary: '#4A4A4A',     // Gris moyen
+  textMuted: '#8E8E93',         // Gris clair
+  
+  // Backgrounds
+  background: '#FFFFFF',         // Blanc pur
+  backgroundTinted: '#F5F9FF',   // Fond teinté info patient (bleu très léger)
+  
+  // Bordures
+  border: '#E5E5EA',            // Bordure standard
+  borderLight: '#F0F0F0',       // Bordure très légère
+  
+  // Sections SOAPIE (labels colorés)
+  sectionLabels: {
+    S: '#0A84FF',               // Bleu pour Subjectif
+    O: '#0A84FF',               // Bleu pour Objectif
+    A: '#0A84FF',               // Bleu pour Analyse
+    P: '#0A84FF',               // Bleu pour Plan
+    I: '#0A84FF',               // Bleu pour Intervention
+    E: '#0A84FF',               // Bleu pour Évaluation
   }
 };
 
+// Typographie médicale (Inter/SF Pro/Roboto équivalents)
 const FONTS = {
-  title: 'Helvetica-Bold',       // Titres principaux
-  subtitle: 'Helvetica-Bold',    // Sous-titres
-  body: 'Helvetica',             // Corps de texte
-  label: 'Helvetica',            // Labels
-  monospace: 'Courier'           // Valeurs chiffrées
-};
-
-const SECTION_TITLES = {
-  S: 'SUBJECTIF',
-  O: 'OBJECTIF',
-  A: 'ANALYSE',
-  I: 'INTERVENTION',
-  E: 'ÉVALUATION',
-  P: 'PLAN'
+  title: 'Helvetica-Bold',
+  subtitle: 'Helvetica-Bold',
+  body: 'Helvetica',
+  bodyBold: 'Helvetica-Bold',
+  mono: 'Courier'
 };
 
 // ============================================================================
-// FONCTIONS UTILITAIRES
+// UTILITAIRES DE FORMATAGE
 // ============================================================================
 
 function safeValue(value) {
   if (value === null || value === undefined) return 'Non renseigné';
   if (typeof value === 'string' && value.trim() === '') return 'Non renseigné';
-  if (typeof value === 'object' && Object.keys(value).length === 0) return 'Non renseigné';
-  if (Array.isArray(value) && value.length === 0) return 'Non renseigné';
   return String(value).trim();
 }
 
@@ -99,437 +79,550 @@ function calculateAge(dob) {
     if (isNaN(birthDate.getTime())) return null;
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
     return `${age} ans`;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function formatDate(date) {
   if (!date) return '';
   try {
-    const d = new Date(date);
-    return d.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric'
+    return new Date(date).toLocaleDateString('fr-FR', { 
+      day: '2-digit', 
+      month: 'long', 
+      year: 'numeric' 
     });
-  } catch {
-    return '';
-  }
+  } catch { return ''; }
 }
 
 function formatTime(date) {
   if (!date) return '';
   try {
-    const d = new Date(date);
-    return d.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(date).toLocaleTimeString('fr-FR', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
     });
-  } catch {
-    return '';
-  }
+  } catch { return ''; }
 }
 
-function ensurePageSpace(doc, requiredHeight) {
-  const remainingHeight = doc.page.height - doc.y - MARGINS.bottom;
-  if (remainingHeight < requiredHeight) {
+function ensurePageSpace(doc, height) {
+  if (doc.page.height - doc.y - MARGINS.bottom < height) {
     doc.addPage();
     doc.y = MARGINS.top;
   }
 }
 
-// ============================================================================
-// HEADER KADDUCARE
-// ============================================================================
+/**
+ * Formate strictement les unités médicales
+ */
+function formatVital(value, type) {
+  if (!value) return '--';
+  const v = String(value).replace(',', '.').trim();
+  const num = parseFloat(v);
 
-function renderHeader(doc, recordedAt, createdAt, contentWidth) {
-  const headerHeight = 70;
-  const dateTime = recordedAt || createdAt || new Date();
+  if (isNaN(num)) return v;
 
-  // Fond blanc pur pour le header (style papier à en-tête)
-  // Logo KadduCare (Texte stylisé faute d'image)
-  doc.fontSize(22)
-    .fillColor(COLORS.primary)
-    .font(FONTS.title)
-    .text('KadduCare', MARGINS.left, 25, {
-      width: contentWidth * 0.5,
-      align: 'left'
-    });
-
-  // Sous-titre "Medical Intelligence"
-  doc.fontSize(9)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.body)
-    .text('Medical Intelligence', MARGINS.left, 50, {
-      width: contentWidth * 0.5,
-      align: 'left',
-      characterSpacing: 1
-    });
-
-  // Bloc Date/Heure à droite avec fond léger
-  const dateBlockWidth = 180;
-  const dateBlockX = doc.page.width - MARGINS.right - dateBlockWidth;
-
-  doc.roundedRect(dateBlockX, 20, dateBlockWidth, 40, 4)
-    .fillColor(COLORS.section.s) // Fond bleu très pâle
-    .fill();
-
-  doc.fontSize(9)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.label)
-    .text('DATE DU RAPPORT', dateBlockX + 10, 26, {
-      width: dateBlockWidth - 20,
-      align: 'left'
-    });
-
-  doc.fontSize(11)
-    .fillColor(COLORS.primary)
-    .font(FONTS.title)
-    .text(formatDate(dateTime), dateBlockX + 10, 40, {
-      width: dateBlockWidth - 20,
-      align: 'left'
-    });
-
-  // Ligne de séparation dégradée (simulée par ligne fine)
-  doc.moveTo(MARGINS.left, headerHeight + 10)
-    .lineTo(doc.page.width - MARGINS.right, headerHeight + 10)
-    .strokeColor(COLORS.border)
-    .lineWidth(1)
-    .stroke();
-
-  doc.y = headerHeight + 30;
+  switch (type) {
+    case 'temp':
+      return `${num.toLocaleString('fr-FR')} °C`;
+    case 'hr':
+      return `${Math.round(num)} bpm`;
+    case 'rr':
+      return `${Math.round(num)} / min`;
+    case 'spo2':
+      return `${Math.round(num)} %`;
+    case 'bp':
+      return `${v} mmHg`;
+    case 'glycemia':
+      return `${v} g/L`;
+    default:
+      return v;
+  }
 }
 
 // ============================================================================
-// CARTE PATIENT PREMIUM
+// COMPOSANTS LAYOUT (Reproduction exacte du mockup)
 // ============================================================================
 
-function renderPatientCard(doc, patientData, patientId, noteId, contentWidth) {
-  ensurePageSpace(doc, 110);
+/**
+ * Header avec logo KadduCare + bannière bleue
+ */
+function renderHeader(doc, recordedAt, createdAt) {
+  const dateTime = recordedAt || createdAt || new Date();
+  const pageWidth = doc.page.width;
+  
+  // Bannière bleue en haut (hauteur ~50px)
+  const bannerHeight = 50;
+  doc.rect(0, 0, pageWidth, bannerHeight)
+    .fillColor(COLORS.primary)
+    .fill();
+  
+  // Logo KadduCare (texte stylisé en blanc sur bannière bleue)
+  doc.fontSize(20)
+    .fillColor('#FFFFFF')
+    .font(FONTS.title)
+    .text('KadduCare', MARGINS.left, 15);
+  
+  // Titre du rapport (blanc sur bannière)
+  doc.fontSize(11)
+    .fillColor('#FFFFFF')
+    .font(FONTS.body)
+    .text('Rapport Infirmier (Format SOAPIE)', MARGINS.left, 35);
+  
+  // Date et Heure (blanc, aligné droite)
+  const dateStr = formatDate(dateTime);
+  const timeStr = formatTime(dateTime);
+  const rightX = pageWidth - MARGINS.right;
+  
+  doc.fontSize(10)
+    .fillColor('#FFFFFF')
+    .font(FONTS.body)
+    .text(dateStr, rightX, 15, { align: 'right', width: 200 });
+  
+  doc.fontSize(10)
+    .fillColor('#FFFFFF')
+    .font(FONTS.body)
+    .text(timeStr, rightX, 30, { align: 'right', width: 200 });
+  
+  // Position de départ pour le contenu
+  doc.y = bannerHeight + 20;
+}
 
-  const cardY = doc.y;
-  const padding = 20;
-  const cardHeight = 90;
-
-  // Fond de la carte patient (Gris très léger pour détacher du fond blanc)
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 8)
-    .fillColor(COLORS.backgroundAlt)
-    .fill()
+/**
+ * Bloc Informations Patient avec fond teinté
+ */
+function renderPatientInfo(doc, patientData, contentWidth) {
+  ensurePageSpace(doc, 100);
+  
+  const startY = doc.y;
+  const blockHeight = 80;
+  const blockPadding = 15;
+  
+  // Rectangle avec fond teinté (bleu très léger)
+  doc.rect(MARGINS.left, startY, contentWidth, blockHeight)
+    .fillColor(COLORS.backgroundTinted)
+    .fill();
+  
+  // Bordure légère
+  doc.rect(MARGINS.left, startY, contentWidth, blockHeight)
     .strokeColor(COLORS.border)
     .lineWidth(0.5)
     .stroke();
-
-  // Avatar placeholder (Cercle avec initiales)
-  const avatarSize = 50;
-  const avatarX = MARGINS.left + padding;
-  const avatarY = cardY + (cardHeight - avatarSize) / 2;
-
-  doc.circle(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2)
-    .fillColor(COLORS.primary)
-    .fill();
-
-  const initials = patientData.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  doc.fontSize(18)
-    .fillColor(COLORS.white)
-    .font(FONTS.title)
-    .text(initials, avatarX, avatarY + 16, {
-      width: avatarSize,
-      align: 'center'
-    });
-
-  // Informations Patient
-  const infoX = avatarX + avatarSize + 20;
-  const infoY = cardY + 20;
-
-  // Nom
-  doc.fontSize(16)
-    .fillColor(COLORS.text)
-    .font(FONTS.title)
-    .text(patientData.full_name, infoX, infoY);
-
-  // Détails (Âge, Sexe)
-  const details = [
-    patientData.age || 'Âge inconnu',
-    patientData.gender || 'Sexe inconnu'
-  ].join(' • ');
-
-  doc.fontSize(11)
+  
+  const colWidth = (contentWidth - blockPadding * 3) / 2;
+  const textY = startY + blockPadding;
+  
+  // Colonne 1 : Nom et Âge
+  doc.fontSize(9)
     .fillColor(COLORS.textSecondary)
     .font(FONTS.body)
-    .text(details, infoX, infoY + 22);
-
-  // Localisation (Droite)
-  if (patientData.room_number || patientData.unit) {
-    const locX = doc.page.width - MARGINS.right - 150;
-
-    doc.fontSize(9)
-      .fillColor(COLORS.textMuted)
-      .font(FONTS.label)
-      .text('LOCALISATION', locX, infoY, { align: 'right' });
-
-    doc.fontSize(12)
-      .fillColor(COLORS.text)
-      .font(FONTS.body)
-      .text(patientData.room_number ? `Ch. ${patientData.room_number}` : '', locX, infoY + 14, { align: 'right' });
-
-    doc.fontSize(10)
-      .fillColor(COLORS.textSecondary)
-      .font(FONTS.body)
-      .text(patientData.unit || '', locX, infoY + 30, { align: 'right' });
-  }
-
-  doc.y = cardY + cardHeight + 25;
-}
-
-// ============================================================================
-// SECTIONS SOAPIE - DESIGN CARTE
-// ============================================================================
-
-function renderSection(doc, letter, content, contentWidth) {
-  if (isEmpty(content)) return;
-
-  const title = SECTION_TITLES[letter] || letter;
-  const bgColor = COLORS.section[letter.toLowerCase()] || COLORS.backgroundAlt;
-  const borderColor = COLORS.sectionBorder[letter.toLowerCase()] || COLORS.primary;
-
-  // Estimation hauteur
-  const estimatedHeight = Array.isArray(content)
-    ? content.length * 16 + 60
-    : String(content).split('\n').length * 16 + 60;
-
-  ensurePageSpace(doc, estimatedHeight);
-
-  const cardY = doc.y;
-  const padding = 15;
-  let cardHeight = 40; // Hauteur min initiale
-
-  // Titre de la section (Badge style)
-  const titleWidth = 120;
-  doc.roundedRect(MARGINS.left, cardY, titleWidth, 24, 4)
-    .fillColor(borderColor)
-    .fill();
-
-  doc.fontSize(10)
-    .fillColor(COLORS.white)
-    .font(FONTS.title)
-    .text(`${letter}  •  ${title}`, MARGINS.left, cardY + 7, {
-      width: titleWidth,
-      align: 'center'
-    });
-
-  // Contenu
-  let contentY = cardY + 35;
-
-  // Barre verticale de continuité
-  const barX = MARGINS.left + 15;
-
-  if (Array.isArray(content)) {
-    const validItems = content.filter(item => item && String(item).trim());
-    validItems.forEach((item) => {
-      // Puce stylisée
-      doc.circle(barX, contentY + 6, 2)
-        .fillColor(borderColor)
-        .fill();
-
-      doc.fontSize(11)
-        .fillColor(COLORS.text)
-        .font(FONTS.body)
-        .text(String(item).trim(), barX + 15, contentY, {
-          width: contentWidth - 40,
-          lineGap: 4,
-          align: 'justify'
-        });
-      contentY = doc.y + 8;
-    });
-  } else {
-    doc.fontSize(11)
-      .fillColor(COLORS.text)
-      .font(FONTS.body)
-      .text(String(content), MARGINS.left, contentY, {
-        width: contentWidth,
-        lineGap: 4,
-        align: 'justify'
-      });
-    contentY = doc.y + 8;
-  }
-
-  doc.y = contentY + 15;
-}
-
-function renderVitalsTable(doc, vitals, contentWidth) {
-  if (!vitals || typeof vitals !== 'object') return;
-
-  // Filtrer
-  const rows = [];
-  if (!isEmpty(vitals.temperature)) rows.push({ label: 'Température', value: vitals.temperature, unit: '°C' });
-  if (!isEmpty(vitals.blood_pressure)) rows.push({ label: 'Tension', value: vitals.blood_pressure, unit: 'cmHg' });
-  if (!isEmpty(vitals.heart_rate)) rows.push({ label: 'Fréquence Cardiaque', value: vitals.heart_rate, unit: 'bpm' });
-  if (!isEmpty(vitals.respiratory_rate)) rows.push({ label: 'Fréquence Respi.', value: vitals.respiratory_rate, unit: '/min' });
-  if (!isEmpty(vitals.spo2)) rows.push({ label: 'SpO₂', value: vitals.spo2, unit: '%' });
-  if (!isEmpty(vitals.glycemia)) rows.push({ label: 'Glycémie', value: vitals.glycemia, unit: 'g/L' });
-
-  if (rows.length === 0) return;
-
-  ensurePageSpace(doc, 100);
-
-  const tableY = doc.y;
-
-  // Titre "Signes Vitaux"
+    .text('NOM COMPLET', MARGINS.left + blockPadding, textY);
+  
   doc.fontSize(12)
     .fillColor(COLORS.text)
-    .font(FONTS.subtitle)
-    .text('Signes Vitaux', MARGINS.left, tableY);
-
-  let currentY = tableY + 20;
-
-  // Grille de signes vitaux (3 colonnes)
-  const colWidth = contentWidth / 3;
-
-  rows.forEach((row, index) => {
-    const colIndex = index % 3;
-    const rowIndex = Math.floor(index / 3);
-
-    if (colIndex === 0 && rowIndex > 0) currentY += 45;
-
-    const x = MARGINS.left + (colIndex * colWidth);
-
-    // Carte signe vital
-    doc.roundedRect(x, currentY, colWidth - 10, 40, 6)
-      .fillColor(COLORS.backgroundAlt)
-      .fill()
-      .strokeColor(COLORS.border)
-      .lineWidth(0.5)
-      .stroke();
-
-    doc.fontSize(9)
-      .fillColor(COLORS.textSecondary)
-      .font(FONTS.label)
-      .text(row.label.toUpperCase(), x + 10, currentY + 8, { width: colWidth - 30 });
-
-    doc.fontSize(12)
-      .fillColor(COLORS.primary)
-      .font(FONTS.title)
-      .text(`${row.value} ${row.unit}`, x + 10, currentY + 22, { width: colWidth - 30 });
-  });
-
-  doc.y = currentY + 55;
+    .font(FONTS.bodyBold)
+    .text(safeValue(patientData.full_name), MARGINS.left + blockPadding, textY + 12);
+  
+  doc.fontSize(9)
+    .fillColor(COLORS.textSecondary)
+    .font(FONTS.body)
+    .text('ÂGE', MARGINS.left + blockPadding, textY + 35);
+  
+  doc.fontSize(12)
+    .fillColor(COLORS.text)
+    .font(FONTS.body)
+    .text(safeValue(patientData.age || '--'), MARGINS.left + blockPadding, textY + 47);
+  
+  // Colonne 2 : Sexe et Unité/Service
+  const col2X = MARGINS.left + blockPadding + colWidth + blockPadding;
+  
+  doc.fontSize(9)
+    .fillColor(COLORS.textSecondary)
+    .font(FONTS.body)
+    .text('SEXE', col2X, textY);
+  
+  doc.fontSize(12)
+    .fillColor(COLORS.text)
+    .font(FONTS.body)
+    .text(safeValue(patientData.gender || '--'), col2X, textY + 12);
+  
+  doc.fontSize(9)
+    .fillColor(COLORS.textSecondary)
+    .font(FONTS.body)
+    .text('UNITÉ / SERVICE', col2X, textY + 35);
+  
+  const unitText = `${safeValue(patientData.unit || '--')}${patientData.room_number ? ` - Ch. ${patientData.room_number}` : ''}`;
+  doc.fontSize(12)
+    .fillColor(COLORS.text)
+    .font(FONTS.body)
+    .text(unitText, col2X, textY + 47, { width: colWidth });
+  
+  doc.y = startY + blockHeight + 25;
 }
 
-function renderObjectiveSection(doc, objective, contentWidth) {
-  if (!objective || typeof objective !== 'object') return;
+/**
+ * En-tête de section SOAPIE avec label coloré
+ */
+function renderSOAPIESectionHeader(doc, letter, title) {
+  ensurePageSpace(doc, 30);
+  
+  const sectionY = doc.y;
+  
+  // Label coloré (lettre + titre en bleu)
+  doc.fontSize(11)
+    .fillColor(COLORS.sectionLabels[letter] || COLORS.primary)
+    .font(FONTS.bodyBold)
+    .text(`${letter} – ${title}`, MARGINS.left, sectionY);
+  
+  // Ligne de séparation sous le titre
+  doc.moveTo(MARGINS.left, sectionY + 12)
+    .lineTo(doc.page.width - MARGINS.right, sectionY + 12)
+    .strokeColor(COLORS.border)
+    .lineWidth(0.5)
+    .stroke();
+  
+  doc.y = sectionY + 20;
+}
 
-  const hasVitals = objective.vitals && Object.keys(objective.vitals).some(k => !isEmpty(objective.vitals[k]));
-  const hasExam = !isEmpty(objective.exam);
-  const hasLabs = !isEmpty(objective.labs);
-  const hasMedications = Array.isArray(objective.medications) && objective.medications.some(m => !isEmpty(m));
-
-  if (!hasVitals && !hasExam && !hasLabs && !hasMedications) return;
-
-  ensurePageSpace(doc, 100);
-
-  // Titre Section O
-  const cardY = doc.y;
-  doc.roundedRect(MARGINS.left, cardY, 120, 24, 4)
-    .fillColor(COLORS.sectionBorder.o)
-    .fill();
-
-  doc.fontSize(10)
-    .fillColor(COLORS.white)
-    .font(FONTS.title)
-    .text(`O  •  OBJECTIF`, MARGINS.left, cardY + 7, {
-      width: 120,
-      align: 'center'
-    });
-
-  doc.y += 40;
-
-  if (hasVitals) renderVitalsTable(doc, objective.vitals, contentWidth);
-
-  if (hasExam) {
-    ensurePageSpace(doc, 60);
-    doc.fontSize(11).fillColor(COLORS.primary).font(FONTS.subtitle).text('Examen Physique', MARGINS.left, doc.y);
-    doc.y += 5;
-    doc.fontSize(11).fillColor(COLORS.text).font(FONTS.body).text(objective.exam.trim(), MARGINS.left, doc.y, { width: contentWidth, align: 'justify' });
-    doc.y += 15;
-  }
-
-  if (hasLabs) {
-    ensurePageSpace(doc, 60);
-    doc.fontSize(11).fillColor(COLORS.primary).font(FONTS.subtitle).text('Laboratoire', MARGINS.left, doc.y);
-    doc.y += 5;
-    doc.fontSize(11).fillColor(COLORS.text).font(FONTS.body).text(objective.labs.trim(), MARGINS.left, doc.y, { width: contentWidth, align: 'justify' });
-    doc.y += 15;
-  }
-
-  if (hasMedications) {
-    ensurePageSpace(doc, 60);
-    doc.fontSize(11).fillColor(COLORS.primary).font(FONTS.subtitle).text('Médicaments', MARGINS.left, doc.y);
-    doc.y += 5;
-    objective.medications.forEach(med => {
-      if (med && String(med).trim()) {
-        doc.fontSize(11).fillColor(COLORS.text).font(FONTS.body).text(`• ${String(med).trim()}`, MARGINS.left + 10, doc.y);
-        doc.y += 5;
+/**
+ * Section Subjectif (S) - Texte avec puces
+ */
+function renderSubjective(doc, content, contentWidth) {
+  if (isEmpty(content)) return;
+  
+  renderSOAPIESectionHeader(doc, 'S', 'SUBJECTIF');
+  
+  const textWidth = contentWidth;
+  
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      if (item && String(item).trim()) {
+        doc.fontSize(10)
+          .fillColor(COLORS.text)
+          .font(FONTS.body)
+          .text(`•  ${String(item).trim()}`, MARGINS.left, doc.y, { 
+            width: textWidth, 
+            align: 'left', 
+            lineGap: 3 
+          });
+        doc.y += 3;
       }
     });
-    doc.y += 15;
+  } else {
+    // Si c'est une chaîne, on peut la diviser en phrases
+    const sentences = String(content).trim().split(/[.!?]+/).filter(s => s.trim());
+    sentences.forEach(sentence => {
+      if (sentence.trim()) {
+        doc.fontSize(10)
+          .fillColor(COLORS.text)
+          .font(FONTS.body)
+          .text(`•  ${sentence.trim()}`, MARGINS.left, doc.y, { 
+            width: textWidth, 
+            align: 'left', 
+            lineGap: 3 
+          });
+        doc.y += 3;
+      }
+    });
   }
+  
+  doc.y += 15;
 }
 
-// ============================================================================
-// FOOTER
-// ============================================================================
+/**
+ * Section Objectif (O) - Tableau 2 colonnes + Examen physique
+ */
+function renderObjective(doc, objective, contentWidth) {
+  if (!objective) return;
+  
+  renderSOAPIESectionHeader(doc, 'O', 'OBJECTIF');
+  
+  const vitals = objective.vitals || {};
+  
+  // Tableau des signes vitaux (2 colonnes : Mesure / Valeur)
+  const tableY = doc.y;
+  const col1Width = contentWidth * 0.5; // Colonne "Mesure"
+  const col2Width = contentWidth * 0.5;  // Colonne "Valeur / Observations"
+  const rowHeight = 18;
+  
+  // En-têtes du tableau
+  doc.fontSize(9)
+    .fillColor(COLORS.textSecondary)
+    .font(FONTS.bodyBold)
+    .text('Mesure', MARGINS.left, tableY);
+  
+  doc.fontSize(9)
+    .fillColor(COLORS.textSecondary)
+    .font(FONTS.bodyBold)
+    .text('Valeur / Observations', MARGINS.left + col1Width, tableY);
+  
+  // Ligne de séparation sous les en-têtes
+  doc.moveTo(MARGINS.left, tableY + 12)
+    .lineTo(doc.page.width - MARGINS.right, tableY + 12)
+    .strokeColor(COLORS.border)
+    .lineWidth(0.5)
+    .stroke();
+  
+  let currentY = tableY + 18;
+  
+  // Lignes du tableau (alignement à droite pour les valeurs)
+  const vitalsList = [
+    { label: 'Tension Artérielle (TA)', value: formatVital(vitals.blood_pressure, 'bp') },
+    { label: 'Fréquence Cardiaque (FC)', value: formatVital(vitals.heart_rate, 'hr') },
+    { label: 'Température', value: formatVital(vitals.temperature, 'temp') },
+    { label: 'Fréquence Respiratoire (FR)', value: formatVital(vitals.respiratory_rate, 'rr') },
+    { label: 'Saturation en Oxygène (SpO₂)', value: formatVital(vitals.spo2, 'spo2') },
+  ];
+  
+  vitalsList.forEach(vital => {
+    if (vital.value !== '--') {
+      doc.fontSize(10)
+        .fillColor(COLORS.text)
+        .font(FONTS.body)
+        .text(vital.label, MARGINS.left, currentY, { width: col1Width });
+      
+      doc.fontSize(10)
+        .fillColor(COLORS.text)
+        .font(FONTS.body)
+        .text(vital.value, MARGINS.left + col1Width, currentY, { 
+          width: col2Width, 
+          align: 'right' 
+        });
+      
+      currentY += rowHeight;
+    }
+  });
+  
+  doc.y = currentY + 15;
+  
+  // Examen Physique (sous-section)
+  if (!isEmpty(objective.exam)) {
+    doc.fontSize(10)
+      .fillColor(COLORS.primary)
+      .font(FONTS.bodyBold)
+      .text('Examen Physique', MARGINS.left, doc.y);
+    
+    doc.y += 8;
+    
+    doc.fontSize(10)
+      .fillColor(COLORS.text)
+      .font(FONTS.body)
+      .text(String(objective.exam).trim(), MARGINS.left, doc.y, { 
+        width: contentWidth, 
+        align: 'left', 
+        lineGap: 4 
+      });
+    
+    doc.y += 10;
+  }
+  
+  // Résultats de laboratoire (si présent)
+  if (!isEmpty(objective.labs)) {
+    doc.fontSize(10)
+      .fillColor(COLORS.primary)
+      .font(FONTS.bodyBold)
+      .text('Résultats de laboratoire', MARGINS.left, doc.y);
+    
+    doc.y += 8;
+    
+    doc.fontSize(10)
+      .fillColor(COLORS.text)
+      .font(FONTS.body)
+      .text(String(objective.labs).trim(), MARGINS.left, doc.y, { 
+        width: contentWidth, 
+        align: 'left', 
+        lineGap: 4 
+      });
+    
+    doc.y += 10;
+  }
+  
+  doc.y += 10;
+}
 
-function renderFooter(doc, user, dateTime) {
+/**
+ * Section Analyse (A) - Texte
+ */
+function renderAnalysis(doc, content, contentWidth) {
+  if (isEmpty(content)) return;
+  
+  renderSOAPIESectionHeader(doc, 'A', 'ANALYSE');
+  
+  const textWidth = contentWidth;
+  
+  doc.fontSize(10)
+    .fillColor(COLORS.text)
+    .font(FONTS.body)
+    .text(String(content).trim(), MARGINS.left, doc.y, { 
+      width: textWidth, 
+      align: 'left', 
+      lineGap: 4 
+    });
+  
+  doc.y += 20;
+}
+
+/**
+ * Section Plan (P) - Liste avec puces
+ */
+function renderPlan(doc, content, contentWidth) {
+  if (isEmpty(content)) return;
+  
+  renderSOAPIESectionHeader(doc, 'P', 'PLAN DE SOINS');
+  
+  const textWidth = contentWidth;
+  
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      if (item && String(item).trim()) {
+        doc.fontSize(10)
+          .fillColor(COLORS.text)
+          .font(FONTS.body)
+          .text(`•  ${String(item).trim()}`, MARGINS.left, doc.y, { 
+            width: textWidth, 
+            align: 'left', 
+            lineGap: 3 
+          });
+        doc.y += 3;
+      }
+    });
+  } else {
+    // Diviser en phrases si c'est une chaîne
+    const sentences = String(content).trim().split(/[.!?]+/).filter(s => s.trim());
+    sentences.forEach(sentence => {
+      if (sentence.trim()) {
+        doc.fontSize(10)
+          .fillColor(COLORS.text)
+          .font(FONTS.body)
+          .text(`•  ${sentence.trim()}`, MARGINS.left, doc.y, { 
+            width: textWidth, 
+            align: 'left', 
+            lineGap: 3 
+          });
+        doc.y += 3;
+      }
+    });
+  }
+  
+  doc.y += 15;
+}
+
+/**
+ * Section Intervention (I) - Liste avec puces
+ */
+function renderIntervention(doc, content, contentWidth) {
+  if (isEmpty(content)) return;
+  
+  renderSOAPIESectionHeader(doc, 'I', 'INTERVENTIONS RÉALISÉES');
+  
+  const textWidth = contentWidth;
+  
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      if (item && String(item).trim()) {
+        doc.fontSize(10)
+          .fillColor(COLORS.text)
+          .font(FONTS.body)
+          .text(`•  ${String(item).trim()}`, MARGINS.left, doc.y, { 
+            width: textWidth, 
+            align: 'left', 
+            lineGap: 3 
+          });
+        doc.y += 3;
+      }
+    });
+  } else {
+    const sentences = String(content).trim().split(/[.!?]+/).filter(s => s.trim());
+    sentences.forEach(sentence => {
+      if (sentence.trim()) {
+        doc.fontSize(10)
+          .fillColor(COLORS.text)
+          .font(FONTS.body)
+          .text(`•  ${sentence.trim()}`, MARGINS.left, doc.y, { 
+            width: textWidth, 
+            align: 'left', 
+            lineGap: 3 
+          });
+        doc.y += 3;
+      }
+    });
+  }
+  
+  doc.y += 15;
+}
+
+/**
+ * Section Évaluation (E) - Texte
+ */
+function renderEvaluation(doc, content, contentWidth) {
+  if (isEmpty(content)) return;
+  
+  renderSOAPIESectionHeader(doc, 'E', 'ÉVALUATION');
+  
+  const textWidth = contentWidth;
+  
+  doc.fontSize(10)
+    .fillColor(COLORS.text)
+    .font(FONTS.body)
+    .text(String(content).trim(), MARGINS.left, doc.y, { 
+      width: textWidth, 
+      align: 'left', 
+      lineGap: 4 
+    });
+  
+  doc.y += 20;
+}
+
+/**
+ * Footer avec ligne, mentions et pagination
+ */
+function renderFooter(doc, user) {
   const pageRange = doc.bufferedPageRange();
   const pageCount = pageRange.count;
   const startPage = pageRange.start || 0;
-  const contentWidth = doc.page.width - MARGINS.left - MARGINS.right;
 
   for (let i = startPage; i < startPage + pageCount; i++) {
     doc.switchToPage(i);
-    const footerY = doc.page.height - MARGINS.bottom + 10;
+    const footerY = doc.page.height - MARGINS.bottom + 20;
 
-    doc.moveTo(MARGINS.left, footerY - 15)
-      .lineTo(doc.page.width - MARGINS.right, footerY - 15)
+    // Ligne de séparation
+    doc.moveTo(MARGINS.left, footerY - 10)
+      .lineTo(doc.page.width - MARGINS.right, footerY - 10)
       .strokeColor(COLORS.border)
       .lineWidth(0.5)
       .stroke();
 
-    // Gauche : Infirmière
+    // Gauche : Mention automatique
+    doc.fontSize(8)
+      .fillColor(COLORS.textMuted)
+      .font(FONTS.body)
+      .text('Document généré automatiquement via KadduCare', MARGINS.left, footerY);
+
+    // Centre : Pagination
+    doc.fontSize(8)
+      .fillColor(COLORS.textMuted)
+      .font(FONTS.body)
+      .text(`Page ${i - startPage + 1} sur ${pageCount}`, MARGINS.left, footerY, { 
+        width: doc.page.width - MARGINS.left - MARGINS.right, 
+        align: 'center' 
+      });
+
+    // Droite : Nom de l'infirmière
     if (user && user.full_name) {
       doc.fontSize(8)
         .fillColor(COLORS.textMuted)
         .font(FONTS.body)
-        .text(`Généré par ${user.full_name}`, MARGINS.left, footerY - 5);
+        .text(user.full_name, MARGINS.left, footerY, { 
+          width: doc.page.width - MARGINS.left - MARGINS.right, 
+          align: 'right' 
+        });
     }
-
-    // Centre : Page
-    doc.fontSize(8)
-      .fillColor(COLORS.textMuted)
-      .text(`Page ${i - startPage + 1} / ${pageCount}`, MARGINS.left, footerY - 5, {
-        width: contentWidth,
-        align: 'center'
-      });
-
-    // Droite : KadduCare
-    doc.fontSize(8)
-      .fillColor(COLORS.primary)
-      .font(FONTS.subtitle)
-      .text('KadduCare', MARGINS.left, footerY - 5, {
-        width: contentWidth,
-        align: 'right'
-      });
   }
 }
 
 // ============================================================================
-// MAIN GENERATOR
+// GÉNÉRATEUR PRINCIPAL
 // ============================================================================
 
 async function generatePDF({
@@ -544,48 +637,24 @@ async function generatePDF({
   patientId = null
 }) {
   try {
-    if (!patient || !patient.full_name) {
-      throw new Error('Données patient incomplètes : full_name requis');
-    }
-
+    // Préparation Données
     const patientFromDB = patient || {};
     const patientFromAI = structuredJson?.patient || {};
-
-    const isValidValue = (value) => {
-      if (value === null || value === undefined) return false;
-      if (typeof value === 'string' && value.trim() === '') return false;
-      return true;
-    };
+    const isValid = (v) => v && String(v).trim() !== '';
 
     const patientData = {
-      full_name: (isValidValue(patientFromAI.full_name) && patientFromAI.full_name.trim() !== 'Patient non identifié')
-        ? patientFromAI.full_name.trim()
-        : (isValidValue(patientFromDB.full_name) && patientFromDB.full_name.trim() !== 'Patient non identifié')
-          ? patientFromDB.full_name.trim()
-          : 'Patient Inconnu',
-      age: isValidValue(patientFromAI.age)
-        ? patientFromAI.age.trim()
-        : (patientFromDB.dob ? calculateAge(patientFromDB.dob) : null),
-      gender: isValidValue(patientFromAI.gender)
-        ? patientFromAI.gender.trim()
-        : (isValidValue(patientFromDB.gender) ? patientFromDB.gender : null),
-      room_number: isValidValue(patientFromAI.room_number)
-        ? patientFromAI.room_number.trim()
-        : (isValidValue(patientFromDB.room_number) ? patientFromDB.room_number : null),
-      unit: isValidValue(patientFromAI.unit)
-        ? patientFromAI.unit.trim()
-        : (isValidValue(patientFromDB.unit) ? patientFromDB.unit : null)
+      full_name: isValid(patientFromAI.full_name) ? patientFromAI.full_name : (patientFromDB.full_name || 'Patient Inconnu'),
+      age: isValid(patientFromAI.age) ? patientFromAI.age : calculateAge(patientFromDB.dob),
+      gender: isValid(patientFromAI.gender) ? patientFromAI.gender : patientFromDB.gender,
+      room_number: isValid(patientFromAI.room_number) ? patientFromAI.room_number : patientFromDB.room_number,
+      unit: isValid(patientFromAI.unit) ? patientFromAI.unit : patientFromDB.unit
     };
 
     const soapie = structuredJson?.soapie || {};
-    const dateTime = recordedAt || createdAt || new Date();
 
-    console.log('📄 Génération PDF KadduCare Premium pour:', patientData.full_name);
-
+    // Setup PDF
     const tempDir = os.tmpdir();
-    const sanitizedName = patientData.full_name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-    const dateStr = new Date().toISOString().replace(/[-:]/g, '').substring(0, 15);
-    const fileName = `${sanitizedName}-${dateStr}-kadducare.pdf`;
+    const fileName = `KADDU-${Date.now()}.pdf`;
     const filePath = path.join(tempDir, fileName);
 
     const doc = new PDFDocument({
@@ -599,22 +668,32 @@ async function generatePDF({
 
     const contentWidth = doc.page.width - MARGINS.left - MARGINS.right;
 
-    // 1. Header
-    renderHeader(doc, recordedAt, createdAt, contentWidth);
+    // 1. Header avec bannière bleue
+    renderHeader(doc, recordedAt, createdAt);
 
-    // 2. Patient Card
-    renderPatientCard(doc, patientData, patientId, noteId, contentWidth);
+    // 2. Informations Patient (fond teinté)
+    renderPatientInfo(doc, patientData, contentWidth);
 
-    // 3. SOAPIE Sections
-    if (!isEmpty(soapie.S)) renderSection(doc, 'S', soapie.S, contentWidth);
-    if (soapie.O && typeof soapie.O === 'object') renderObjectiveSection(doc, soapie.O, contentWidth);
-    if (!isEmpty(soapie.A)) renderSection(doc, 'A', soapie.A, contentWidth);
-    if (Array.isArray(soapie.I) && soapie.I.length > 0) renderSection(doc, 'I', soapie.I, contentWidth);
-    if (!isEmpty(soapie.E)) renderSection(doc, 'E', soapie.E, contentWidth);
-    if (!isEmpty(soapie.P)) renderSection(doc, 'P', soapie.P, contentWidth);
+    // 3. S - Subjectif
+    if (!isEmpty(soapie.S)) renderSubjective(doc, soapie.S, contentWidth);
 
-    // 4. Footer
-    renderFooter(doc, user, dateTime);
+    // 4. O - Objectif (tableau + examen physique)
+    if (soapie.O) renderObjective(doc, soapie.O, contentWidth);
+
+    // 5. A - Analyse
+    if (!isEmpty(soapie.A)) renderAnalysis(doc, soapie.A, contentWidth);
+
+    // 6. P - Plan de soins
+    if (!isEmpty(soapie.P)) renderPlan(doc, soapie.P, contentWidth);
+
+    // 7. I - Interventions réalisées
+    if (!isEmpty(soapie.I)) renderIntervention(doc, soapie.I, contentWidth);
+
+    // 8. E - Évaluation
+    if (!isEmpty(soapie.E)) renderEvaluation(doc, soapie.E, contentWidth);
+
+    // Footer
+    renderFooter(doc, user);
 
     doc.end();
 
@@ -624,7 +703,7 @@ async function generatePDF({
     });
 
   } catch (error) {
-    console.error('Erreur génération PDF:', error);
+    console.error('PDF Gen Error:', error);
     throw error;
   }
 }
