@@ -117,9 +117,8 @@ export default function ReportEditScreen() {
     const initializeData = async () => {
       // Si structured_json est déjà fourni, l'utiliser
       if (structuredJsonParam) {
-        console.log('📋 Utilisation du structured_json fourni');
-        console.log('📋 Structured JSON complet:', JSON.stringify(structuredJsonParam, null, 2));
-        
+
+
         // Fusionner : patientData a priorité si full_name existe
         let finalPatient = structuredJsonParam.patient || {};
         if (patientData && patientData.full_name && patientData.full_name.trim()) {
@@ -132,10 +131,10 @@ export default function ReportEditScreen() {
             ...(patientData.unit && { unit: patientData.unit }),
           };
         }
-        
+
         // Extraire les données SOAPIE en préservant toutes les sous-sections
         const soapieData = structuredJsonParam.soapie || structuredJsonParam || {};
-        
+
         // S'assurer que la section O contient toutes les sous-sections (vitals, exam, labs, medications)
         const objectiveData = soapieData.O || {};
         const finalObjective = {
@@ -144,14 +143,14 @@ export default function ReportEditScreen() {
           labs: objectiveData.labs || '',
           medications: Array.isArray(objectiveData.medications) ? objectiveData.medications : (objectiveData.medications || []),
         };
-        
+
         const finalSoapie = {
           ...soapieData,
           O: finalObjective,
         };
-        
-        console.log('📋 SOAPIE final avec vitals:', JSON.stringify(finalSoapie, null, 2));
-        
+
+
+
         setStructuredJson({
           patient: finalPatient && Object.keys(finalPatient).length > 0 ? finalPatient : undefined,
           soapie: finalSoapie,
@@ -165,19 +164,16 @@ export default function ReportEditScreen() {
 
       // Si on a l'audio mais pas de structured_json, uploader pour obtenir les données
       if (audioUri && !structuredJsonParam && !noteId) {
-        console.log('📤 Upload automatique de l\'audio pour obtenir structured_json...');
-        console.log('📁 URI audio:', audioUri);
-        console.log('👤 Patient ID:', patientId || 'aucun');
+
         setIsUploading(true);
-        
+
         try {
           const uploadResponse = await uploadApiService.uploadAudio(audioUri, {
             patientId: patientId || null,
             patientData: patientData || null,
           });
 
-          console.log('✅ Upload réussi, structured_json reçu:', uploadResponse.structured_json);
-          console.log('📋 Structure complète de la réponse:', JSON.stringify(uploadResponse, null, 2));
+
 
           // Mettre à jour les données avec la réponse de l'upload
           if (uploadResponse.structured_json) {
@@ -185,10 +181,10 @@ export default function ReportEditScreen() {
             // 1. { patient: {...}, soapie: {...} } (nouveau format)
             // 2. { soapie: {...} } (ancien format)
             const structuredData = uploadResponse.structured_json;
-            
+
             // Extraire les données SOAPIE
             const soapieData = structuredData.soapie || structuredData;
-            
+
             // Vérifier si les données SOAPIE sont vides
             const hasSOAPIEData = soapieData && (
               soapieData.S?.trim() ||
@@ -200,16 +196,16 @@ export default function ReportEditScreen() {
               soapieData.O?.labs?.trim() ||
               (Array.isArray(soapieData.O?.medications) && soapieData.O.medications.length > 0)
             );
-            
+
             if (!hasSOAPIEData) {
               console.warn('⚠️ ATTENTION: Les données SOAPIE sont vides dans la réponse');
               console.warn('📝 Transcription reçue:', uploadResponse.transcription?.substring(0, 200));
               console.warn('📋 Structured JSON complet:', JSON.stringify(structuredData, null, 2));
             }
-            
+
             // Fusionner les données patient : patientData a priorité si full_name existe
             let finalPatient = structuredData.patient || uploadResponse.patient || {};
-            
+
             // Si patientData a un full_name, l'utiliser (priorité)
             if (patientData && patientData.full_name && patientData.full_name.trim()) {
               finalPatient = {
@@ -229,12 +225,12 @@ export default function ReportEditScreen() {
               finalPatient = patientData;
               console.log('✅ Patient depuis patientData (sans full_name)');
             }
-            
+
             setStructuredJson({
               patient: finalPatient && Object.keys(finalPatient).length > 0 ? finalPatient : undefined,
               soapie: soapieData || {},
             });
-            
+
             console.log('📝 Données SOAPIE extraites:', soapieData);
             console.log('👤 Données patient extraites:', structuredData.patient || uploadResponse.patient);
             console.log('✅ Données SOAPIE présentes:', hasSOAPIEData);
@@ -270,11 +266,11 @@ export default function ReportEditScreen() {
             response: error.response?.data,
           });
           setIsUploading(false);
-          
+
           // Afficher un message d'erreur plus informatif
           const errorMessage = error.message || 'Erreur inconnue';
           const isNetworkError = errorMessage.includes('connexion') || errorMessage.includes('réseau') || errorMessage.includes('Network') || error.code === 'ERR_NETWORK';
-          
+
           Alert.alert(
             isNetworkError ? 'Erreur de connexion' : 'Erreur lors de l\'upload',
             isNetworkError
@@ -298,7 +294,7 @@ export default function ReportEditScreen() {
                         const soapieData = structuredData.soapie || structuredData;
                         // Fusionner les données patient : patientData a priorité si full_name existe
                         let finalPatient = structuredData.patient || uploadResponse.patient || {};
-                        
+
                         // Si patientData a un full_name, l'utiliser (priorité)
                         if (patientData && patientData.full_name && patientData.full_name.trim()) {
                           finalPatient = {
@@ -315,7 +311,7 @@ export default function ReportEditScreen() {
                           // Utiliser patientData même s'il n'a pas de full_name
                           finalPatient = patientData;
                         }
-                        
+
                         setStructuredJson({
                           patient: finalPatient && Object.keys(finalPatient).length > 0 ? finalPatient : undefined,
                           soapie: soapieData || {},
@@ -431,9 +427,9 @@ export default function ReportEditScreen() {
 
       // Si on a l'audio mais pas encore de note_id, on doit d'abord uploader
       if (audioUri && !noteId) {
-        console.log('📤 Upload de l\'audio pour générer le PDF...');
+
         setIsUploading(true);
-        
+
         const uploadResponse = await uploadApiService.uploadAudio(audioUri, {
           patientId: patientId || null,
           patientData: patientData || null,
@@ -446,18 +442,13 @@ export default function ReportEditScreen() {
         // IMPORTANT: Récupérer l'ID du patient depuis la réponse du backend
         // car c'est là que se trouve le nouvel ID créé (ou l'ID retrouvé)
         const finalNoteId = uploadResponse.note?.id || noteId;
-        
+
         // Priorité: 1) note.patient_id (le plus fiable), 2) patient.id (si patient créé), 3) patientId param (si fourni et non vide)
-        const finalPatientId = uploadResponse.note?.patient_id 
-          || uploadResponse.patient?.id 
+        const finalPatientId = uploadResponse.note?.patient_id
+          || uploadResponse.patient?.id
           || (patientId && patientId.trim() ? patientId : null);
 
-        console.log('🔍 Patient ID pour génération PDF:', {
-          fromNote: uploadResponse.note?.patient_id,
-          fromPatient: uploadResponse.patient?.id,
-          fromParam: patientId,
-          final: finalPatientId
-        });
+
 
         if (!finalPatientId) {
           console.warn('⚠️ Aucun patient ID trouvé, le backend devra le récupérer depuis la note');
@@ -466,7 +457,7 @@ export default function ReportEditScreen() {
         // VALIDATION : S'assurer que structuredJson contient les dernières données
         // Attendre un court délai pour garantir que le state est à jour
         await new Promise(resolve => setTimeout(resolve, 50));
-        
+
         // Vérifier que structuredJson contient bien les données patient
         if (!structuredJson || !structuredJson.patient) {
           console.error('❌ structuredJson.patient manquant avant génération PDF');
@@ -478,21 +469,9 @@ export default function ReportEditScreen() {
           setIsGenerating(false);
           return;
         }
-        
+
         // Régénérer le PDF avec les données éditées
-        console.log('📄 Appel de generatePDF avec:', {
-          note_id: finalNoteId,
-          patient_id: finalPatientId,
-          hasStructuredJson: !!structuredJson,
-          hasSOAPIE: !!structuredJson.soapie,
-          patient: structuredJson.patient ? {
-            full_name: structuredJson.patient.full_name || '(vide)',
-            age: structuredJson.patient.age || '(vide)',
-            gender: structuredJson.patient.gender || '(vide)',
-            room_number: structuredJson.patient.room_number || '(vide)',
-            unit: structuredJson.patient.unit || '(vide)'
-          } : '(absent)'
-        });
+
 
         const pdfResponse = await reportApiService.generatePDF({
           note_id: finalNoteId || undefined,
@@ -501,11 +480,7 @@ export default function ReportEditScreen() {
           transcription: uploadResponse.transcription || transcription,
         });
 
-        console.log('✅ PDF généré, réponse:', {
-          ok: pdfResponse.ok,
-          pdf_url: pdfResponse.pdf_url ? pdfResponse.pdf_url.substring(0, 50) + '...' : 'absent',
-          note_id: pdfResponse.note_id
-        });
+
 
         if (!pdfResponse.pdf_url) {
           throw new Error('URL du PDF non retournée par le serveur');
@@ -524,17 +499,13 @@ export default function ReportEditScreen() {
         // Si noteId existe, le backend récupérera automatiquement le patient_id depuis la note
         // Sinon, utiliser patientId seulement s'il n'est pas vide
         const finalPatientId = (patientId && patientId.trim()) ? patientId : undefined;
-        
-        console.log('🔍 Patient ID pour génération PDF (sans upload):', {
-          fromParam: patientId,
-          noteId: noteId,
-          final: finalPatientId || 'sera récupéré depuis la note'
-        });
+
+
 
         // VALIDATION : S'assurer que structuredJson contient les dernières données
         // Attendre un court délai pour garantir que le state est à jour
         await new Promise(resolve => setTimeout(resolve, 50));
-        
+
         // Vérifier que structuredJson contient bien les données patient
         if (!structuredJson || !structuredJson.patient) {
           console.error('❌ structuredJson.patient manquant avant génération PDF');
@@ -546,20 +517,8 @@ export default function ReportEditScreen() {
           setIsGenerating(false);
           return;
         }
-        
-        console.log('📄 Appel de generatePDF (sans upload) avec:', {
-          note_id: noteId,
-          patient_id: finalPatientId,
-          hasStructuredJson: !!structuredJson,
-          hasSOAPIE: !!structuredJson.soapie,
-          patient: structuredJson.patient ? {
-            full_name: structuredJson.patient.full_name || '(vide)',
-            age: structuredJson.patient.age || '(vide)',
-            gender: structuredJson.patient.gender || '(vide)',
-            room_number: structuredJson.patient.room_number || '(vide)',
-            unit: structuredJson.patient.unit || '(vide)'
-          } : '(absent)'
-        });
+
+
 
         const pdfResponse = await reportApiService.generatePDF({
           note_id: noteId || undefined,
@@ -568,11 +527,7 @@ export default function ReportEditScreen() {
           transcription: transcription,
         });
 
-        console.log('✅ PDF généré, réponse:', {
-          ok: pdfResponse.ok,
-          pdf_url: pdfResponse.pdf_url ? pdfResponse.pdf_url.substring(0, 50) + '...' : 'absent',
-          note_id: pdfResponse.note_id
-        });
+
 
         if (!pdfResponse.pdf_url) {
           throw new Error('URL du PDF non retournée par le serveur');
@@ -601,15 +556,15 @@ export default function ReportEditScreen() {
 
   const renderSOAPIESection = (section: SOAPIESection) => {
     const value = structuredJson.soapie?.[section.key];
-    const displayValue = Array.isArray(value) ? value.join('\n') : (value || '');
+    const displayValue = Array.isArray(value) ? value.join('\n') : (typeof value === 'object' ? '' : (value || ''));
 
     if (section.key === 'O' && section.isObject) {
       // Section Objective est un objet complexe
       const objective = structuredJson.soapie?.O;
       const vitals = objective?.vitals || {};
-      
+
       return (
-        <View key={section.key} style={[styles.sectionCard, { 
+        <View key={section.key} style={[styles.sectionCard, {
           backgroundColor: theme.colors.backgroundCard,
           borderColor: theme.colors.borderCard,
         }]}>
@@ -778,7 +733,7 @@ export default function ReportEditScreen() {
     }
 
     return (
-      <View key={section.key} style={[styles.sectionCard, { 
+      <View key={section.key} style={[styles.sectionCard, {
         backgroundColor: theme.colors.backgroundCard,
         borderColor: theme.colors.borderCard,
       }]}>
@@ -859,8 +814,8 @@ export default function ReportEditScreen() {
               borderColor: theme.colors.success,
             }]}>
               <Ionicons name="checkmark-circle" size={32} color={theme.colors.success} />
-              <Text style={[styles.successText, { 
-                color: theme.resolved === 'dark' ? theme.colors.success : '#1B5E20' 
+              <Text style={[styles.successText, {
+                color: theme.resolved === 'dark' ? theme.colors.success : '#1B5E20'
               }]}>
                 Structuration terminée
               </Text>
@@ -879,7 +834,7 @@ export default function ReportEditScreen() {
               <Ionicons name="person-circle-outline" size={20} color={theme.colors.primary} />
               <Text style={[styles.patientCardTitle, { color: theme.colors.text }]}>Informations du Patient</Text>
             </View>
-            
+
             <View style={styles.patientInfoGrid}>
               {/* Nom complet */}
               <View style={[styles.patientInfoRow, { borderBottomColor: theme.colors.border }]}>
@@ -970,7 +925,7 @@ export default function ReportEditScreen() {
           {/* Bouton CTA */}
           <TouchableOpacity
             style={[
-              styles.generateButton, 
+              styles.generateButton,
               { backgroundColor: theme.colors.primary },
               isGenerating && { backgroundColor: theme.colors.primary + '80' }
             ]}

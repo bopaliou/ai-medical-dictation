@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
       const userStr = await AsyncStorage.getItem(AUTH_USER_KEY);
-      
+
       if (token && userStr) {
         // Note: La vérification d'expiration sera faite par le backend
         // Si le token est expiré, le backend retournera 401 et on gérera ça dans les services API
@@ -50,11 +50,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   };
-  
+
   // Vérifier périodiquement si le token existe encore (au cas où il serait supprimé par handleTokenExpiration)
   useEffect(() => {
     if (!isAuthenticated) return;
-    
+
     const interval = setInterval(async () => {
       const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
       if (!token) {
@@ -65,10 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
       }
     }, 1000); // Vérifier toutes les 1 seconde (plus réactif)
-    
+
     return () => clearInterval(interval);
   }, [isAuthenticated]);
-  
+
   // Réagir immédiatement quand isAuthenticated change à false
   useEffect(() => {
     if (isAuthenticated === false && !isLoading) {
@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }, 200);
     }
-    
+
     // Enregistrer le callback pour que handleTokenExpiration puisse forcer la déconnexion
     setForceLogoutCallback(async () => {
       console.log('🔒 Callback forceLogout appelé depuis handleTokenExpiration');
@@ -101,10 +101,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsAuthenticated(true);
       setUser(userData);
-      
+
       await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
       await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData));
-      
+
       await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
       setIsAuthenticated(false);
@@ -120,10 +120,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
       await AsyncStorage.removeItem(AUTH_USER_KEY);
-      setIsAuthenticated(false);
-      setUser(null);
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
+    } finally {
+      setIsAuthenticated(false);
+      setUser(null);
     }
   };
 

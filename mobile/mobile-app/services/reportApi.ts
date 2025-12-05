@@ -67,6 +67,9 @@ export interface Report {
     full_name: string;
     gender?: string;
     dob?: string;
+    age?: string;
+    room_number?: string;
+    unit?: string;
   } | null;
 }
 
@@ -150,7 +153,7 @@ class ReportApiService {
    */
   async getReportDetails(reportId: string): Promise<ReportDetails> {
     const requestKey = `getReportDetails_${reportId}`;
-    
+
     // Utiliser debounce pour éviter les requêtes multiples
     return rateLimiter.debounce(requestKey, async () => {
       // Retry avec backoff pour les erreurs 429
@@ -192,7 +195,7 @@ class ReportApiService {
         } catch (error: any) {
           if (axios.isAxiosError(error)) {
             const axiosError = error as AxiosError<{ error: string; message?: string }>;
-            
+
             // Erreur 429 - Trop de requêtes (traitée comme un warning, pas une erreur critique)
             if (axiosError.response?.status === 429) {
               const retryAfter = axiosError.response.headers['retry-after'];
@@ -207,7 +210,7 @@ class ReportApiService {
                 `💡 Astuce : L'application va automatiquement réessayer dans quelques instants.`
               );
             }
-            
+
             // Erreur réseau (backend inaccessible)
             if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
               const errorMessage = `Oups ! Nous n'arrivons pas à nous connecter au serveur.\n\n` +
@@ -219,16 +222,16 @@ class ReportApiService {
                 `💡 Astuce : Vérifiez votre connexion WiFi et réessayez dans quelques instants.`;
               throw new Error(errorMessage);
             }
-            
+
             if (axiosError.response?.status === 404) {
               throw new Error('Ce rapport n\'a pas été trouvé dans le système.');
             }
-            
+
             if (axiosError.response?.status === 403) {
               throw new Error('Vous n\'avez pas l\'autorisation de consulter ce rapport.');
             }
           }
-          
+
           // Pour les autres erreurs, logger comme erreur
           console.error('❌ Erreur lors de la récupération des détails:', error);
 
@@ -247,7 +250,7 @@ class ReportApiService {
    */
   async getReports(options?: { status?: string; limit?: number; offset?: number }): Promise<GetReportsResponse> {
     const requestKey = `getReports_${options?.status || 'all'}_${options?.limit || 'default'}`;
-    
+
     // Utiliser debounce pour éviter les requêtes multiples
     return rateLimiter.debounce(requestKey, async () => {
       // Retry avec backoff pour les erreurs 429
@@ -292,7 +295,7 @@ class ReportApiService {
         } catch (error: any) {
           if (axios.isAxiosError(error)) {
             const axiosError = error as AxiosError<{ error: string; message?: string }>;
-            
+
             // Erreur 429 - Trop de requêtes (traitée comme un warning, pas une erreur critique)
             if (axiosError.response?.status === 429) {
               const retryAfter = axiosError.response.headers['retry-after'];
@@ -308,13 +311,13 @@ class ReportApiService {
               );
             }
           }
-          
+
           // Pour les autres erreurs, logger comme erreur
           console.error('❌ Erreur lors de la récupération des rapports:', error);
 
           if (axios.isAxiosError(error)) {
             const axiosError = error as AxiosError<{ error: string; message?: string }>;
-            
+
             // Erreur réseau (backend inaccessible)
             if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
               const errorMessage = `Oups ! Nous n'arrivons pas à nous connecter au serveur.\n\n` +
@@ -326,7 +329,7 @@ class ReportApiService {
                 `💡 Astuce : Vérifiez votre connexion WiFi et réessayez dans quelques instants.`;
               throw new Error(errorMessage);
             }
-            
+
             if (axiosError.response?.status === 404) {
               throw new Error('Le service de rapports n\'est pas disponible. Veuillez réessayer plus tard.');
             }
@@ -379,11 +382,11 @@ class ReportApiService {
 
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string; message?: string }>;
-        
+
         if (axiosError.response?.status === 404) {
           throw new Error('Ce rapport n\'a pas été trouvé dans le système.');
         }
-        
+
         if (axiosError.response?.status === 403) {
           throw new Error('Vous n\'avez pas l\'autorisation de modifier ce rapport.');
         }
@@ -466,25 +469,25 @@ class ReportApiService {
 
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string; message?: string }>;
-        
+
         if (axiosError.response?.status === 404) {
           throw new Error('Le service de génération PDF n\'est pas disponible. Veuillez réessayer plus tard.');
         }
-        
+
         if (axiosError.response?.status === 400) {
           const errorMessage = axiosError.response.data?.message || 'Les données fournies ne sont pas valides pour générer le PDF';
           console.error('❌ Erreur 400:', errorMessage);
           console.error('   Données envoyées:', JSON.stringify(data, null, 2));
           throw new Error(`Veuillez vérifier les informations saisies. ${errorMessage}`);
         }
-        
+
         if (axiosError.response?.status === 500) {
           const errorMessage = axiosError.response.data?.message || axiosError.response.data?.error || 'Une erreur s\'est produite lors de la génération du PDF';
           console.error('❌ Erreur 500:', errorMessage);
           console.error('   Détails backend:', axiosError.response.data);
           throw new Error(`Une erreur inattendue s'est produite. ${errorMessage} Veuillez réessayer dans quelques instants.`);
         }
-        
+
         if (axiosError.response?.status) {
           console.error(`❌ Erreur HTTP ${axiosError.response.status}:`, axiosError.response.data);
           throw new Error(axiosError.response.data?.message || `Erreur HTTP ${axiosError.response.status}`);
@@ -580,11 +583,11 @@ class ReportApiService {
 
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string; message?: string }>;
-        
+
         if (axiosError.response?.status === 404) {
           throw new Error('Ce rapport n\'a pas été trouvé dans le système.');
         }
-        
+
         if (axiosError.response?.status === 403) {
           throw new Error('Vous n\'avez pas la permission de supprimer ce rapport');
         }
@@ -634,11 +637,11 @@ class ReportApiService {
 
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string; message?: string }>;
-        
+
         if (axiosError.response?.status === 404) {
           throw new Error('Ce rapport n\'a pas été trouvé dans le système.');
         }
-        
+
         if (axiosError.response?.status === 403) {
           throw new Error('Vous n\'avez pas l\'autorisation de modifier ce rapport.');
         }

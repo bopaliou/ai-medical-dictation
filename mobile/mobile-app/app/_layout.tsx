@@ -39,7 +39,7 @@ function RootLayoutNav() {
   // Gérer l'affichage du splash screen React uniquement au démarrage
   useEffect(() => {
     if (splashFinished) return;
-    
+
     // Le splash React s'affiche pendant 2.5 secondes puis disparaît
     const timer = setTimeout(() => {
       setShowSplash(false);
@@ -57,11 +57,11 @@ function RootLayoutNav() {
     const inTabs = segments[0] === '(tabs)';
     const currentRoute = segments[0];
     const secondSegment = segments[1];
-    
+
     // Routes qui sont autorisées même si on n'est pas dans les tabs
     const allowedRoutes = ['record', 'settings', 'modal', 'report', 'pdf-viewer', 'patient'];
     // Vérifier si on est sur une route report (report/details, report/edit, etc.)
-    const isReportRoute = currentRoute === 'report' || (currentRoute === 'report' && secondSegment);
+    const isReportRoute = (currentRoute as string) === 'report' || ((currentRoute as string) === 'report' && secondSegment);
     const isAllowedRoute = allowedRoutes.includes(currentRoute) || isReportRoute;
 
     // PRIORITÉ 1: Si l'utilisateur est authentifié, il ne doit pas voir l'onboarding
@@ -72,23 +72,23 @@ function RootLayoutNav() {
         router.replace('/(tabs)');
         return;
       }
-      
+
       // Si on est sur le login alors qu'on est authentifié, rediriger vers l'app
-        if (inLogin) {
-          const timeoutId = setTimeout(() => {
-            if (segments[0] === 'login') {
-              router.replace('/(tabs)');
-            }
-          }, 1000);
-          return () => clearTimeout(timeoutId);
-        }
-        
-        // Ne pas rediriger si on est sur une route autorisée (record, settings, etc.)
-        if (!inTabs && !isAllowedRoute) {
-          router.replace('/(tabs)');
-        }
-        return;
+      if (inLogin) {
+        const timeoutId = setTimeout(() => {
+          if (segments[0] === 'login') {
+            router.replace('/(tabs)');
+          }
+        }, 1000);
+        return () => clearTimeout(timeoutId);
       }
+
+      // Ne pas rediriger si on est sur une route autorisée (record, settings, etc.)
+      if (!inTabs && !isAllowedRoute) {
+        router.replace('/(tabs)');
+      }
+      return;
+    }
 
     // PRIORITÉ 2: Si l'utilisateur n'est pas authentifié, vérifier l'onboarding
     if (isAuthenticated === false) {
@@ -99,16 +99,16 @@ function RootLayoutNav() {
           router.replace('/login');
           return;
         }
-        
+
         // Si on est dans les tabs sans être authentifié, rediriger vers login
         if (inTabs) {
           router.replace('/login');
           return;
         }
-        
+
         // Si on est déjà sur login, ne rien faire
         if (inLogin) return;
-        
+
         // Sinon, rediriger vers login
         router.replace('/login');
         return;
@@ -128,7 +128,7 @@ function RootLayoutNav() {
     <NavigationThemeProvider value={theme.resolved === 'dark' ? DarkTheme : DefaultTheme}>
       {/* Afficher le splash React immédiatement pour couvrir le splash natif */}
       {showSplash && (
-        <SplashScreen 
+        <SplashScreen
           onFinish={() => setShowSplash(false)}
           duration={2500}
         />
@@ -140,29 +140,29 @@ function RootLayoutNav() {
         <Stack.Screen name="record" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="settings" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="pdf-viewer" options={{ headerShown: false, presentation: 'card' }} />
-        <Stack.Screen 
-          name="patient/[id]" 
-          options={{ 
-            headerShown: false, 
+        <Stack.Screen
+          name="patient/[id]"
+          options={{
+            headerShown: false,
             presentation: 'card',
             title: 'Patient'
-          }} 
+          }}
         />
-        <Stack.Screen 
-          name="report/details" 
-          options={{ 
-            headerShown: false, 
+        <Stack.Screen
+          name="report/details"
+          options={{
+            headerShown: false,
             presentation: 'card',
             title: 'Rapport'
-          }} 
+          }}
         />
-        <Stack.Screen 
-          name="report/edit" 
-          options={{ 
-            headerShown: false, 
+        <Stack.Screen
+          name="report/edit"
+          options={{
+            headerShown: false,
             presentation: 'card',
             title: 'Édition Rapport'
-          }} 
+          }}
         />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
@@ -174,9 +174,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

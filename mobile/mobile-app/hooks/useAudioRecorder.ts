@@ -48,13 +48,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const recorder = useExpoAudioRecorder(customPreset, (status) => {
     // Callback pour les mises à jour de statut
     console.log('📊 Statut de l\'enregistrement:', {
-      isRecording: status.isRecording,
+      isRecording: (status as any).isRecording,
       isFinished: status.isFinished,
       url: status.url,
       hasError: status.hasError,
       error: status.error,
     });
-    
+
     if (status.isFinished && status.url) {
       console.log('✅ Enregistrement terminé, URI:', status.url);
       setRecordingUri(status.url);
@@ -88,7 +88,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       const permissions = await requestRecordingPermissionsAsync();
       const granted = permissions.granted || false;
       setHasPermission(granted);
-      
+
       if (!granted) {
         Alert.alert(
           'Permission requise',
@@ -96,7 +96,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           [{ text: 'OK' }]
         );
       }
-      
+
       return granted;
     } catch (err) {
       console.error('Erreur lors de la demande de permissions:', err);
@@ -142,7 +142,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     } catch (err: any) {
       console.error('❌ Erreur lors du démarrage de l\'enregistrement:', err);
       setError(err.message || 'Erreur lors du démarrage de l\'enregistrement');
-      
+
       if (err.message?.includes('permission')) {
         Alert.alert(
           'Permission requise',
@@ -161,24 +161,24 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
 
       console.log('🛑 Arrêt de l\'enregistrement...');
-      
+
       // Arrêter l'enregistrement
       await recorder.stop();
-      
+
       // Attendre que l'enregistrement soit terminé et que l'URI soit disponible
       // On attend jusqu'à 2 secondes maximum
       let uri: string | null = null;
       const maxWait = 2000; // 2 secondes
       const checkInterval = 100; // Vérifier toutes les 100ms
       let waited = 0;
-      
+
       while (waited < maxWait && !uri) {
         // Vérifier si l'URI est disponible dans le callback (via recordingUri)
         if (recordingUri) {
           uri = recordingUri;
           break;
         }
-        
+
         // Vérifier aussi directement sur le recorder
         try {
           const recorderUri = (recorder as any).uri;
@@ -189,7 +189,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         } catch (e) {
           // Ignorer les erreurs d'accès à l'URI
         }
-        
+
         // Attendre avant de vérifier à nouveau
         await new Promise(resolve => setTimeout(resolve, checkInterval));
         waited += checkInterval;
@@ -214,7 +214,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         recordingUri,
         recorderUri: (recorder as any).uri,
       });
-      
+
       return null;
     } catch (err: any) {
       console.error('❌ Erreur lors de l\'arrêt de l\'enregistrement:', err);

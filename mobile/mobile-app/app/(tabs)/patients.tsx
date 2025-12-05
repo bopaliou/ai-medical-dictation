@@ -72,17 +72,17 @@ export default function PatientsScreen() {
         const reportsResponse = await reportApiService.getReports({ limit: 1000 });
         if (reportsResponse.ok && reportsResponse.reports) {
           const stats: Record<string, PatientStats> = {};
-          
+
           // Calculer les statistiques par patient
           for (const patient of allPatients) {
             const patientReports = reportsResponse.reports.filter(
               report => report.patient_id === patient.id && report.status !== 'trash'
             );
-            
+
             const lastReport = patientReports.length > 0
-              ? patientReports.sort((a, b) => 
-                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                )[0]
+              ? patientReports.sort((a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )[0]
               : null;
 
             // Charger les détails du dernier rapport pour obtenir les infos médicales
@@ -90,14 +90,14 @@ export default function PatientsScreen() {
             let lastReportDetails = undefined;
             if (lastReport && lastReport.status === 'final') {
               try {
-                const reportDetails = await reportApiService.getReportDetails(lastReport.id);
-                if (reportDetails.ok && reportDetails.report) {
+                const report = await reportApiService.getReportDetails(lastReport.id);
+                if (report) {
                   lastReportDetails = {
-                    vitals: reportDetails.report.soapie?.O?.vitals,
-                    medications: Array.isArray(reportDetails.report.soapie?.O?.medications)
-                      ? reportDetails.report.soapie.O.medications
+                    vitals: report.soapie?.O?.vitals,
+                    medications: Array.isArray(report.soapie?.O?.medications)
+                      ? report.soapie.O.medications
                       : undefined,
-                    assessment: reportDetails.report.soapie?.A,
+                    assessment: report.soapie?.A,
                   };
                 }
               } catch (error) {
@@ -105,14 +105,14 @@ export default function PatientsScreen() {
                 console.error(`Erreur lors du chargement des détails du rapport ${lastReport.id}:`, error);
               }
             }
-            
+
             stats[patient.id] = {
               reportsCount: patientReports.length,
               lastReportDate: lastReport?.created_at,
               lastReportDetails,
             };
           }
-          
+
           setPatientStats(stats);
         }
       } catch (error) {
@@ -221,13 +221,13 @@ export default function PatientsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
-      
+
       {/* Header KadduCare */}
       <AppHeader />
 
       {/* Header moderne et élégant avec recherche et filtres intégrés */}
-      <View style={[styles.headerContainer, { 
-        backgroundColor: theme.colors.backgroundCard, 
+      <View style={[styles.headerContainer, {
+        backgroundColor: theme.colors.backgroundCard,
         borderBottomColor: theme.colors.border,
         paddingTop: Spacing.lg,
       }]}>
@@ -239,108 +239,108 @@ export default function PatientsScreen() {
             </View>
             <View style={styles.headerTextContainer}>
               <Text style={[styles.title, { color: theme.colors.text }]}>Patients</Text>
-        {!isLoading && (
+              {!isLoading && (
                 <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
-            {searchTerm && ` trouvé${filteredPatients.length > 1 ? 's' : ''}`}
-          </Text>
-        )}
+                  {filteredPatients.length} {filteredPatients.length === 1 ? 'patient' : 'patients'}
+                  {searchTerm && ` trouvé${filteredPatients.length > 1 ? 's' : ''}`}
+                </Text>
+              )}
             </View>
           </View>
-      </View>
+        </View>
 
         {/* Barre de recherche premium */}
-        <View style={[styles.searchContainer, { 
-          backgroundColor: theme.colors.backgroundSecondary, 
-          borderColor: theme.colors.border 
+        <View style={[styles.searchContainer, {
+          backgroundColor: theme.colors.backgroundSecondary,
+          borderColor: theme.colors.border
         }]}>
           <View style={[styles.searchIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
             <Ionicons name="search" size={18} color={theme.colors.primary} />
           </View>
-        <TextInput
+          <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
             placeholder="Rechercher un patient..."
             placeholderTextColor={theme.colors.textMuted}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-        />
-        {searchTerm.length > 0 && (
-          <TouchableOpacity 
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity
               onPress={() => {
                 setSearchTerm('');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }} 
-            style={styles.clearButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
+              }}
+              style={styles.clearButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Ionicons name="close-circle" size={20} color={theme.colors.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Filtres de tri modernes */}
-      <View style={styles.sortContainer}>
-        <View style={styles.sortButtons}>
-          <TouchableOpacity
+        <View style={styles.sortContainer}>
+          <View style={styles.sortButtons}>
+            <TouchableOpacity
               style={[
-                styles.sortButton, 
-                { 
-                  backgroundColor: sortType === 'alphabetical' 
-                    ? theme.colors.primary 
-                    : theme.colors.backgroundSecondary, 
-                  borderColor: sortType === 'alphabetical' 
-                    ? theme.colors.primary 
-                    : theme.colors.border 
+                styles.sortButton,
+                {
+                  backgroundColor: sortType === 'alphabetical'
+                    ? theme.colors.primary
+                    : theme.colors.backgroundSecondary,
+                  borderColor: sortType === 'alphabetical'
+                    ? theme.colors.primary
+                    : theme.colors.border
                 }
               ]}
               onPress={() => {
                 setSortType('alphabetical');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-                name={sortType === 'alphabetical' ? 'text' : 'text-outline'} 
-              size={16} 
-                color={sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textMuted} 
-            />
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={sortType === 'alphabetical' ? 'text' : 'text-outline'}
+                size={16}
+                color={sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textMuted}
+              />
               <Text style={[
-                styles.sortButtonText, 
+                styles.sortButtonText,
                 { color: sortType === 'alphabetical' ? '#FFFFFF' : theme.colors.textSecondary }
               ]}>
-              Alphabétique
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+                Alphabétique
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[
-                styles.sortButton, 
-                { 
-                  backgroundColor: sortType === 'recent' 
-                    ? theme.colors.primary 
-                    : theme.colors.backgroundSecondary, 
-                  borderColor: sortType === 'recent' 
-                    ? theme.colors.primary 
-                    : theme.colors.border 
+                styles.sortButton,
+                {
+                  backgroundColor: sortType === 'recent'
+                    ? theme.colors.primary
+                    : theme.colors.backgroundSecondary,
+                  borderColor: sortType === 'recent'
+                    ? theme.colors.primary
+                    : theme.colors.border
                 }
               ]}
               onPress={() => {
                 setSortType('recent');
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-                name={sortType === 'recent' ? 'time' : 'time-outline'} 
-              size={16} 
-                color={sortType === 'recent' ? '#FFFFFF' : theme.colors.textMuted} 
-            />
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={sortType === 'recent' ? 'time' : 'time-outline'}
+                size={16}
+                color={sortType === 'recent' ? '#FFFFFF' : theme.colors.textMuted}
+              />
               <Text style={[
-                styles.sortButtonText, 
+                styles.sortButtonText,
                 { color: sortType === 'recent' ? '#FFFFFF' : theme.colors.textSecondary }
               ]}>
-              Récents
-            </Text>
-          </TouchableOpacity>
+                Récents
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -429,24 +429,24 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
   // Calculer l'âge à partir de la date de naissance si disponible
   const calculateAge = (dob?: string, ageString?: string): string | null => {
     if (ageString) return ageString;
-    
+
     if (dob) {
       try {
         const birthDate = new Date(dob);
         const today = new Date();
         let age = today.getFullYear() - birthDate.getFullYear();
         const monthDiff = today.getMonth() - birthDate.getMonth();
-        
+
         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
           age--;
         }
-        
+
         return age > 0 ? `${age} ans` : null;
       } catch {
         return null;
       }
     }
-    
+
     return null;
   };
 
@@ -466,9 +466,9 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
 
   // Vérifier si des signes vitaux sont disponibles
   const hasVitals = vitals && (
-    vitals.blood_pressure || 
-    vitals.temperature || 
-    vitals.heart_rate || 
+    vitals.blood_pressure ||
+    vitals.temperature ||
+    vitals.heart_rate ||
     vitals.spo2
   );
   const hasMedications = medications && medications.length > 0;
@@ -482,12 +482,12 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
       const now = new Date();
       const diffTime = Math.abs(now.getTime() - date.getTime());
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
+
       if (diffDays === 0) return "Aujourd'hui";
       if (diffDays === 1) return "Hier";
       if (diffDays < 7) return `Il y a ${diffDays} jours`;
       if (diffDays < 30) return `Il y a ${Math.floor(diffDays / 7)} sem.`;
-      
+
       return date.toLocaleDateString('fr-FR', {
         day: '2-digit',
         month: '2-digit',
@@ -515,9 +515,9 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
       ]}
     >
       <TouchableOpacity
-        style={[styles.patientCard, { 
-          backgroundColor: theme.colors.backgroundCard, 
-          borderColor: theme.colors.borderCard 
+        style={[styles.patientCard, {
+          backgroundColor: theme.colors.backgroundCard,
+          borderColor: theme.colors.borderCard
         }]}
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -548,10 +548,10 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
             )}
             {hasGender && (
               <View style={styles.infoItem}>
-                <Ionicons 
-                  name={patient.gender?.toLowerCase().includes('f') ? "female" : "male"} 
-                  size={14} 
-                  color={theme.colors.primary} 
+                <Ionicons
+                  name={patient.gender?.toLowerCase().includes('f') ? "female" : "male"}
+                  size={14}
+                  color={theme.colors.primary}
                 />
                 <Text style={[styles.infoText, { color: theme.colors.text }]}>{patient.gender}</Text>
               </View>
@@ -583,36 +583,36 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
               {hasVitals && (
                 <View style={styles.vitalsRow}>
                   {vitals.blood_pressure && (
-                    <View style={[styles.vitalBadge, { 
-                      backgroundColor: theme.colors.errorLight, 
-                      borderColor: theme.colors.error + '40' 
+                    <View style={[styles.vitalBadge, {
+                      backgroundColor: theme.colors.errorLight,
+                      borderColor: theme.colors.error + '40'
                     }]}>
                       <Ionicons name="pulse" size={12} color={theme.colors.error} />
                       <Text style={[styles.vitalText, { color: theme.colors.error }]}>TA: {vitals.blood_pressure}</Text>
                     </View>
                   )}
                   {vitals.temperature && (
-                    <View style={[styles.vitalBadge, { 
-                      backgroundColor: theme.colors.warningLight, 
-                      borderColor: theme.colors.warning + '40' 
+                    <View style={[styles.vitalBadge, {
+                      backgroundColor: theme.colors.warningLight,
+                      borderColor: theme.colors.warning + '40'
                     }]}>
                       <Ionicons name="thermometer" size={12} color={theme.colors.warning} />
                       <Text style={[styles.vitalText, { color: theme.colors.warning }]}>{vitals.temperature}°C</Text>
                     </View>
                   )}
                   {vitals.heart_rate && (
-                    <View style={[styles.vitalBadge, { 
-                      backgroundColor: theme.colors.errorLight, 
-                      borderColor: theme.colors.error + '40' 
+                    <View style={[styles.vitalBadge, {
+                      backgroundColor: theme.colors.errorLight,
+                      borderColor: theme.colors.error + '40'
                     }]}>
                       <Ionicons name="heart" size={12} color={theme.colors.error} />
                       <Text style={[styles.vitalText, { color: theme.colors.error }]}>{vitals.heart_rate} bpm</Text>
                     </View>
                   )}
                   {vitals.spo2 && (
-                    <View style={[styles.vitalBadge, { 
-                      backgroundColor: theme.colors.primaryLight, 
-                      borderColor: theme.colors.primary + '40' 
+                    <View style={[styles.vitalBadge, {
+                      backgroundColor: theme.colors.primaryLight,
+                      borderColor: theme.colors.primary + '40'
                     }]}>
                       <Ionicons name="water" size={12} color={theme.colors.primary} />
                       <Text style={[styles.vitalText, { color: theme.colors.primary }]}>SpO₂: {vitals.spo2}%</Text>
@@ -623,13 +623,13 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
 
               {/* Médications */}
               {hasMedications && (
-                <View style={[styles.medicationsRow, { 
+                <View style={[styles.medicationsRow, {
                   backgroundColor: theme.colors.primaryLight,
                   borderColor: theme.colors.primary + '40',
                 }]}>
                   <Ionicons name="medical" size={13} color={theme.colors.primary} />
                   <Text style={[styles.medicationsText, { color: theme.colors.primary }]} numberOfLines={1}>
-                    {medications.length === 1 
+                    {medications.length === 1
                       ? medications[0]
                       : `${medications.length} médicament${medications.length > 1 ? 's' : ''}`
                     }
@@ -639,7 +639,7 @@ function PatientCard({ patient, getInitials, getAvatarColor, onPress, index, sta
 
               {/* Diagnostic/Évaluation */}
               {hasAssessment && (
-                <View style={[styles.assessmentRow, { 
+                <View style={[styles.assessmentRow, {
                   backgroundColor: theme.colors.backgroundSecondary,
                   borderColor: theme.colors.border,
                 }]}>

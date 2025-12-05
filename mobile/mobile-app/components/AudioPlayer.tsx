@@ -41,7 +41,7 @@ export default function AudioPlayer({ audioUri, onError }: AudioPlayerProps) {
 
   const togglePlayPause = () => {
     if (status.isLoaded) {
-      if (status.isPlaying) {
+      if (status.playing) {
         player.pause();
       } else {
         player.play();
@@ -80,7 +80,7 @@ export default function AudioPlayer({ audioUri, onError }: AudioPlayerProps) {
           activeOpacity={0.7}
         >
           <Ionicons
-            name={status.isPlaying ? 'pause' : 'play'}
+            name={status.playing ? 'pause' : 'play'}
             size={28}
             color="#FFFFFF"
           />

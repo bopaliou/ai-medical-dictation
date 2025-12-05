@@ -29,7 +29,7 @@ const { width } = Dimensions.get('window');
 export default function RecordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  
+
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientData, setPatientData] = useState<CreatePatientData | null>(null);
   const [skip, setSkip] = useState(false);
@@ -46,11 +46,11 @@ export default function RecordScreen() {
     if (params.patientId && params.patientId !== '') {
       setPatientId(params.patientId as string);
     }
-    
+
     if (params.skip === 'true') {
       setSkip(true);
     }
-    
+
     if (params.patientData && params.patientData !== '') {
       try {
         const parsed = JSON.parse(params.patientData as string);
@@ -91,7 +91,7 @@ export default function RecordScreen() {
 
       // Démarrer l'enregistrement
       await recorder.startRecording();
-      
+
       // Démarrer le timer et le waveform
       timer.start();
       waveform.start();
@@ -104,10 +104,10 @@ export default function RecordScreen() {
   const handleStopRecording = async () => {
     try {
       console.log('🛑 Arrêt de l\'enregistrement demandé...');
-      
+
       // Arrêter l'enregistrement
       const audioUri = await recorder.stopRecording();
-      
+
       // Arrêter le timer et le waveform
       timer.stop();
       waveform.stop();
@@ -184,7 +184,7 @@ export default function RecordScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="auto" />
-      
+
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {/* Header moderne */}
         <ModernHeader
@@ -207,7 +207,7 @@ export default function RecordScreen() {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#FF6B6B', '#FF3B30']}
+              colors={['#FF6B6B', '#FF3B30'] as any}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.stopButton}

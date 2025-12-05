@@ -16,7 +16,7 @@ export interface UseTimerReturn {
 export function useTimer(): UseTimerReturn {
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<any | null>(null);
 
   useEffect(() => {
     if (isRunning) {

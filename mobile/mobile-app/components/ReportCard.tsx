@@ -103,33 +103,33 @@ export default function ReportCard({
   };
 
   const getReportSummary = (report: Report): string => {
-    const soapie = (report as any).structured_json?.soapie || report.soapie;
-    
+    const soapie: any = (report as any).structured_json?.soapie || (report as any).soapie;
+
     // Priorité 1: Motif de consultation
     if (soapie?.S) {
       const s = String(soapie.S).trim();
       return s.length > 100 ? s.substring(0, 100) + '...' : s;
     }
-    
+
     // Priorité 2: Évaluation clinique
     if (soapie?.A) {
       const a = String(soapie.A).trim();
       return a.length > 100 ? a.substring(0, 100) + '...' : a;
     }
-    
+
     // Priorité 3: Plan de soins
     if (soapie?.P) {
       const p = String(soapie.P).trim();
       return p.length > 100 ? p.substring(0, 100) + '...' : p;
     }
-    
+
     // Par défaut: Texte générique
     return 'Note médicale de consultation';
   };
 
   const getReportTitle = (): string => {
-    const soapie = (report as any).structured_json?.soapie || report.soapie;
-    
+    const soapie: any = (report as any).structured_json?.soapie || (report as any).soapie;
+
     // Priorité 1: Utiliser le motif de consultation pour un titre descriptif
     if (soapie?.S) {
       const s = String(soapie.S).trim();
@@ -140,7 +140,7 @@ export default function ReportCard({
         return s.substring(0, 97) + '...';
       }
     }
-    
+
     // Priorité 2: Utiliser l'évaluation clinique si disponible
     if (soapie?.A) {
       const a = String(soapie.A).trim();
@@ -150,7 +150,7 @@ export default function ReportCard({
         return a.substring(0, 97) + '...';
       }
     }
-    
+
     // Priorité 3: Utiliser le plan de soins si disponible
     if (soapie?.P) {
       const p = String(soapie.P).trim();
@@ -160,12 +160,12 @@ export default function ReportCard({
         return p.substring(0, 97) + '...';
       }
     }
-    
+
     // Priorité 4: Nom du patient si disponible
     if (report.patient?.full_name) {
       return `Consultation - ${report.patient.full_name}`;
     }
-    
+
     // Par défaut: Titre générique mais informatif
     return 'Rapport de consultation médicale';
   };
@@ -175,7 +175,7 @@ export default function ReportCard({
   const title = getReportTitle();
 
   // Extraire les signes vitaux uniquement
-  const soapie = (report as any).structured_json?.soapie || report.soapie;
+  const soapie: any = (report as any).structured_json?.soapie || (report as any).soapie;
   const vitals = soapie?.O?.vitals;
 
   // Vérifier si des signes vitaux sont disponibles
@@ -206,9 +206,9 @@ export default function ReportCard({
       ]}
     >
       <TouchableOpacity
-        style={[styles.reportCard, { 
-          backgroundColor: theme.colors.backgroundCard, 
-          borderColor: theme.colors.borderCard 
+        style={[styles.reportCard, {
+          backgroundColor: theme.colors.backgroundCard,
+          borderColor: theme.colors.borderCard
         }]}
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -242,9 +242,9 @@ export default function ReportCard({
 
             {/* Informations patient - Design compact et aligné */}
             {report.patient?.full_name && (
-              <View style={[styles.patientInfo, { 
-                backgroundColor: theme.colors.primaryLight, 
-                borderColor: theme.colors.primary + '20' 
+              <View style={[styles.patientInfo, {
+                backgroundColor: theme.colors.primaryLight,
+                borderColor: theme.colors.primary + '20'
               }]}>
                 <View style={[styles.patientIconWrapper, { backgroundColor: theme.colors.primaryLight }]}>
                   <Ionicons name="person" size={16} color={theme.colors.primary} />
@@ -288,9 +288,9 @@ export default function ReportCard({
                 </View>
                 <View style={styles.vitalsGrid}>
                   {vitals.temperature && vitals.temperature.trim() !== '' && (
-                    <View style={[styles.vitalItem, { 
-                      backgroundColor: theme.colors.backgroundSecondary, 
-                      borderColor: theme.colors.border 
+                    <View style={[styles.vitalItem, {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border
                     }]}>
                       <Ionicons name="thermometer" size={14} color="#FF9500" />
                       <Text style={[styles.vitalValue, { color: theme.colors.text }]}>
@@ -299,18 +299,18 @@ export default function ReportCard({
                     </View>
                   )}
                   {vitals.blood_pressure && vitals.blood_pressure.trim() !== '' && (
-                    <View style={[styles.vitalItem, { 
-                      backgroundColor: theme.colors.backgroundSecondary, 
-                      borderColor: theme.colors.border 
+                    <View style={[styles.vitalItem, {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border
                     }]}>
                       <Ionicons name="pulse" size={14} color="#FF3B30" />
                       <Text style={[styles.vitalValue, { color: theme.colors.text }]}>{vitals.blood_pressure.trim()}</Text>
                     </View>
                   )}
                   {vitals.heart_rate && vitals.heart_rate.trim() !== '' && (
-                    <View style={[styles.vitalItem, { 
-                      backgroundColor: theme.colors.backgroundSecondary, 
-                      borderColor: theme.colors.border 
+                    <View style={[styles.vitalItem, {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border
                     }]}>
                       <Ionicons name="heart" size={14} color="#FF3B30" />
                       <Text style={[styles.vitalValue, { color: theme.colors.text }]}>
@@ -319,9 +319,9 @@ export default function ReportCard({
                     </View>
                   )}
                   {vitals.respiratory_rate && vitals.respiratory_rate.trim() !== '' && (
-                    <View style={[styles.vitalItem, { 
-                      backgroundColor: theme.colors.backgroundSecondary, 
-                      borderColor: theme.colors.border 
+                    <View style={[styles.vitalItem, {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border
                     }]}>
                       <Ionicons name="fitness" size={14} color="#5AC8FA" />
                       <Text style={[styles.vitalValue, { color: theme.colors.text }]}>
@@ -330,9 +330,9 @@ export default function ReportCard({
                     </View>
                   )}
                   {vitals.spo2 && vitals.spo2.trim() !== '' && (
-                    <View style={[styles.vitalItem, { 
-                      backgroundColor: theme.colors.backgroundSecondary, 
-                      borderColor: theme.colors.border 
+                    <View style={[styles.vitalItem, {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border
                     }]}>
                       <Ionicons name="water" size={14} color={theme.colors.primary} />
                       <Text style={[styles.vitalValue, { color: theme.colors.text }]}>
@@ -341,9 +341,9 @@ export default function ReportCard({
                     </View>
                   )}
                   {vitals.glycemia && vitals.glycemia.trim() !== '' && (
-                    <View style={[styles.vitalItem, { 
-                      backgroundColor: theme.colors.backgroundSecondary, 
-                      borderColor: theme.colors.border 
+                    <View style={[styles.vitalItem, {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border
                     }]}>
                       <Ionicons name="flask" size={14} color="#FF9500" />
                       <Text style={[styles.vitalValue, { color: theme.colors.text }]}>
@@ -378,9 +378,9 @@ export default function ReportCard({
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <View style={[styles.actionButtonInner, { 
-                  backgroundColor: theme.colors.backgroundSecondary, 
-                  borderColor: theme.colors.border 
+                <View style={[styles.actionButtonInner, {
+                  backgroundColor: theme.colors.backgroundSecondary,
+                  borderColor: theme.colors.border
                 }]}>
                   <Ionicons name="share-outline" size={20} color={theme.colors.primary} />
                 </View>
@@ -395,9 +395,9 @@ export default function ReportCard({
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <View style={[styles.actionButtonInner, { 
-                  backgroundColor: theme.colors.backgroundSecondary, 
-                  borderColor: theme.colors.border 
+                <View style={[styles.actionButtonInner, {
+                  backgroundColor: theme.colors.backgroundSecondary,
+                  borderColor: theme.colors.border
                 }]}>
                   <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.textMuted} />
                 </View>

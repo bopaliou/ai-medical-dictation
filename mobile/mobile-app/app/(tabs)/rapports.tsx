@@ -121,13 +121,13 @@ function FilterChip({ label, filterKey, isActive, onPress, index }: { label: str
             styles.filterChip,
             isActive
               ? {
-                  backgroundColor: colors.activeBg,
-                  borderColor: colors.activeBorder,
-                }
+                backgroundColor: colors.activeBg,
+                borderColor: colors.activeBorder,
+              }
               : {
-                  backgroundColor: colors.inactiveBg,
-                  borderColor: colors.inactiveBorder,
-                },
+                backgroundColor: colors.inactiveBg,
+                borderColor: colors.inactiveBorder,
+              },
             { transform: [{ scale: scaleAnim }] },
           ]}
         >
@@ -160,11 +160,11 @@ export default function RapportsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Animations d'écran : fade + slide-up
   const screenOpacity = React.useRef(new Animated.Value(0)).current;
   const screenTranslateY = React.useRef(new Animated.Value(20)).current;
-  
+
   useEffect(() => {
     Animated.parallel([
       fadeIn(screenOpacity, ANIMATION_DURATION.SCREEN_TRANSITION),
@@ -224,32 +224,32 @@ export default function RapportsScreen() {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'final':
-        return { 
-          color: theme.colors.success, 
+        return {
+          color: theme.colors.success,
           bgColor: theme.colors.successLight,
-          label: 'Finalisé', 
-          icon: 'checkmark-circle' as const 
+          label: 'Finalisé',
+          icon: 'checkmark-circle' as const
         };
       case 'draft':
-        return { 
-          color: theme.colors.warning, 
+        return {
+          color: theme.colors.warning,
           bgColor: theme.colors.warningLight,
-          label: 'Brouillon', 
-          icon: 'document-text' as const 
+          label: 'Brouillon',
+          icon: 'document-text' as const
         };
       case 'trash':
-        return { 
-          color: theme.colors.error, 
+        return {
+          color: theme.colors.error,
           bgColor: theme.colors.errorLight,
-          label: 'Corbeille', 
-          icon: 'trash' as const 
+          label: 'Corbeille',
+          icon: 'trash' as const
         };
       default:
-        return { 
-          color: theme.colors.textMuted, 
+        return {
+          color: theme.colors.textMuted,
           bgColor: theme.colors.backgroundSecondary,
-          label: status, 
-          icon: 'ellipse' as const 
+          label: status,
+          icon: 'ellipse' as const
         };
     }
   };
@@ -381,9 +381,9 @@ export default function RapportsScreen() {
 
       {/* Header moderne avec gradient - Edge-to-edge */}
       <LinearGradient
-        colors={theme.resolved === 'dark' 
+        colors={(theme.resolved === 'dark'
           ? [theme.colors.backgroundElevated, theme.colors.backgroundCard]
-          : ['#FFFFFF', '#F8FAFC']}
+          : ['#FFFFFF', '#F8FAFC']) as any}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={[styles.headerGradient, { borderBottomColor: theme.colors.border }]}
@@ -397,28 +397,28 @@ export default function RapportsScreen() {
             <View style={styles.headerStats}>
               <Text style={[styles.statsText, { color: theme.colors.textSecondary }]}>{filteredReports.length} rapport{filteredReports.length > 1 ? 's' : ''}</Text>
             </View>
+          </View>
         </View>
-      </View>
 
         {/* Barre de recherche premium avec glassmorphism */}
         <View style={styles.searchWrapper}>
-          <View style={[styles.searchContainer, { 
+          <View style={[styles.searchContainer, {
             backgroundColor: theme.colors.backgroundCard,
             borderColor: theme.colors.borderCard,
           }]}>
             <View style={[styles.searchIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
               <Ionicons name="search" size={20} color={theme.colors.primary} />
             </View>
-        <TextInput
+            <TextInput
               style={[styles.searchInput, { color: theme.colors.text }]}
-          placeholder="Rechercher par patient ou date..."
+              placeholder="Rechercher par patient ou date..."
               placeholderTextColor={theme.colors.textMuted}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
               returnKeyType="search"
               clearButtonMode="never"
-        />
-        {searchTerm.length > 0 && (
+            />
+            {searchTerm.length > 0 && (
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -430,23 +430,23 @@ export default function RapportsScreen() {
                 <View style={[styles.clearButtonInner, { backgroundColor: theme.colors.backgroundSecondary }]}>
                   <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
                 </View>
-          </TouchableOpacity>
-        )}
+              </TouchableOpacity>
+            )}
           </View>
-      </View>
+        </View>
 
         {/* Chips de filtres premium avec animations */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-        contentContainerStyle={styles.filtersContent}
-      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersContainer}
+          contentContainerStyle={styles.filtersContent}
+        >
           {filters.map((filter, index) => {
             const isActive = activeFilter === filter.key;
             return (
               <FilterChip
-            key={filter.key}
+                key={filter.key}
                 label={filter.label}
                 filterKey={filter.key}
                 isActive={isActive}
@@ -458,7 +458,7 @@ export default function RapportsScreen() {
               />
             );
           })}
-      </ScrollView>
+        </ScrollView>
       </LinearGradient>
 
       {/* Liste des rapports */}
@@ -476,8 +476,8 @@ export default function RapportsScreen() {
             {searchTerm
               ? 'Aucun résultat'
               : activeFilter === 'all'
-              ? 'Aucun rapport'
-              : `Aucun rapport ${filters.find(f => f.key === activeFilter)?.label.toLowerCase()}`}
+                ? 'Aucun rapport'
+                : `Aucun rapport ${filters.find(f => f.key === activeFilter)?.label.toLowerCase()}`}
           </Text>
           <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
             {searchTerm
@@ -494,15 +494,15 @@ export default function RapportsScreen() {
           }
         >
           {filteredReports.map((report, index) => (
-              <ReportCard
-                key={report.id}
-                report={report}
+            <ReportCard
+              key={report.id}
+              report={report}
               onPress={() => handleReportPress(report)}
               onShare={report.pdf_url ? () => handleSharePDF(report.pdf_url!) : undefined}
-                onMenu={() => showActionMenu(report)}
-                index={index}
+              onMenu={() => showActionMenu(report)}
+              index={index}
               showPatientName={true}
-              />
+            />
           ))}
         </ScrollView>
       )}
@@ -578,7 +578,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 16,
-    borderWidth: 1.5,
     borderWidth: 1,
     // backgroundColor et borderColor appliqués dynamiquement
   },
@@ -626,7 +625,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 11,
     borderRadius: 22,
-    borderWidth: 1.5,
     borderWidth: 1,
     position: 'relative',
     overflow: 'hidden',

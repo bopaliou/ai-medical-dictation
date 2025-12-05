@@ -75,7 +75,7 @@ export default function SplashScreen({ onFinish, duration = 2500 }: SplashScreen
     : ['#E8F1FF', '#D0E5FF', '#B8D9FF', '#A0CDFF'];
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         styles.container,
         {
@@ -85,7 +85,7 @@ export default function SplashScreen({ onFinish, duration = 2500 }: SplashScreen
       ]}
     >
       <LinearGradient
-        colors={gradientColors}
+        colors={gradientColors as any}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={[styles.gradient, StyleSheet.absoluteFill]}

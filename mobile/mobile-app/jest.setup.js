@@ -42,3 +42,72 @@ global.console = {
   error: jest.fn(),
 };
 
+// Mock expo-font
+jest.mock('expo-font', () => ({
+  loadAsync: jest.fn(),
+  isLoaded: jest.fn(() => true),
+}));
+
+// Mock expo-asset
+jest.mock('expo-asset', () => ({
+  Asset: {
+    loadAsync: jest.fn(),
+  },
+}));
+
+// Mock expo-file-system
+jest.mock('expo-file-system', () => ({
+  documentDirectory: 'file:///test-directory/',
+  downloadAsync: jest.fn(),
+  readAsStringAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
+  deleteAsync: jest.fn(),
+  getInfoAsync: jest.fn(),
+  makeDirectoryAsync: jest.fn(),
+}));
+
+// Mock expo-sharing
+jest.mock('expo-sharing', () => ({
+  shareAsync: jest.fn(),
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+}));
+
+// Mock expo-haptics
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(),
+  notificationAsync: jest.fn(),
+  selectionAsync: jest.fn(),
+  ImpactFeedbackStyle: {
+    Light: 'light',
+    Medium: 'medium',
+    Heavy: 'heavy',
+  },
+  NotificationFeedbackType: {
+    Success: 'success',
+    Warning: 'warning',
+    Error: 'error',
+  },
+}));
+
+// Mock expo-linear-gradient
+jest.mock('expo-linear-gradient', () => ({
+  LinearGradient: ({ children }) => children,
+}));
+
+// Mock expo-audio
+jest.mock('expo-audio', () => ({
+  useAudioPlayer: () => ({
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekTo: jest.fn(),
+    playing: false,
+    currentTime: 0,
+    duration: 0,
+  }),
+  useAudioRecorder: () => ({
+    startRecording: jest.fn(),
+    stopRecording: jest.fn(),
+    isRecording: false,
+  }),
+}));
+

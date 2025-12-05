@@ -67,21 +67,21 @@ export default function PDFPreviewScreen() {
   const handleError = async (syntheticEvent: any) => {
     const { nativeEvent } = syntheticEvent;
     console.error('Erreur WebView:', nativeEvent);
-    
+
     // Si l'erreur est liée au bucket (404), essayer de régénérer l'URL (publique ou signée)
     if (nativeEvent?.description?.includes('404') || nativeEvent?.description?.includes('Bucket Not found') || nativeEvent?.description?.includes('Bucket not found')) {
       console.log('🔄 Erreur 404 détectée, tentative de régénération de l\'URL...');
-      
+
       if (reportId) {
         try {
           setIsLoading(true);
           const newSignedUrl = await reportApiService.regenerateSignedUrl(reportId);
           console.log('✅ Nouvelle URL obtenue, rechargement du PDF...');
-          
+
           // Mettre à jour l'URL et recharger
           setPdfUrl(newSignedUrl);
           setError(null);
-          
+
           // Recharger le WebView avec la nouvelle URL
           if (webViewRef.current) {
             webViewRef.current.reload();
@@ -112,19 +112,16 @@ export default function PDFPreviewScreen() {
 
     try {
       setIsActionLoading(true);
-      console.log('📤 Partage du PDF:', pdfUrl);
-      
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        Alert.alert('Information', 'Le partage n\'est pas disponible sur cet appareil');
-        return;
+      console.log('📥 Téléchargement du PDF pour partage...');
+
+      // Assurer que le répertoire de documents existe
+      if (!FileSystem.documentDirectory) {
+        throw new Error('Répertoire de documents non disponible');
       }
 
-      // Télécharger le PDF temporairement pour le partage
-      const fileName = `rapport-${Date.now()}.pdf`;
+      const fileName = `rapport-share-${Date.now()}.pdf`;
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      
-      console.log('📥 Téléchargement du PDF pour partage...');
+
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
       console.log('📥 Résultat du téléchargement:', {
@@ -147,7 +144,7 @@ export default function PDFPreviewScreen() {
       console.error('❌ Erreur lors du partage:', error);
       Alert.alert(
         'Erreur',
-        error.message?.includes('téléchargement') 
+        error.message?.includes('téléchargement')
           ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
           : 'Impossible de partager le PDF. Vérifiez votre connexion.'
       );
@@ -169,12 +166,12 @@ export default function PDFPreviewScreen() {
     try {
       setIsActionLoading(true);
       console.log('🌐 Ouverture du PDF dans le navigateur:', pdfUrl);
-      
+
       await WebBrowser.openBrowserAsync(pdfUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
         controlsColor: '#006CFF',
       });
-      
+
       console.log('✅ PDF ouvert dans le navigateur');
       setShowActionsMenu(false);
     } catch (error: any) {
@@ -199,16 +196,19 @@ export default function PDFPreviewScreen() {
       console.log('🖨️ Impression du PDF:', pdfUrl);
 
       // Vérifier que l'impression est disponible
+      // Note: Print.isAvailableAsync n'est pas disponible dans toutes les versions/plateformes
+      /*
       const isAvailable = await Print.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert(
-          'Information', 
+          'Information',
           'L\'impression n\'est pas disponible sur cet appareil. Veuillez utiliser "Ouvrir dans le navigateur" pour imprimer depuis le navigateur.'
         );
         setIsActionLoading(false);
         setShowActionsMenu(false);
         return;
       }
+      */
 
       // Vérifier que le répertoire de documents existe
       const documentDir = FileSystem.documentDirectory;
@@ -218,7 +218,7 @@ export default function PDFPreviewScreen() {
 
       // Utiliser l'URL actuelle ou régénérer si nécessaire
       let finalPdfUrl = pdfUrl;
-      
+
       // Si on a un reportId et que l'URL semble expirée, essayer de la régénérer
       if (reportId && (pdfUrl.includes('expires=') || pdfUrl.includes('signature='))) {
         try {
@@ -236,25 +236,25 @@ export default function PDFPreviewScreen() {
       // Télécharger le PDF temporairement pour l'impression
       const fileName = `rapport-print-${Date.now()}.pdf`;
       const fileUri = `${documentDir}${fileName}`;
-      
+
       console.log('📥 Téléchargement du PDF pour impression...');
       console.log('   URL source:', finalPdfUrl);
       console.log('   Destination:', fileUri);
-      
+
       // Télécharger avec timeout et meilleure gestion d'erreur
       // Méthode 1: Essayer FileSystem.downloadAsync (plus rapide pour les URLs publiques)
       let downloadResult;
       try {
         const downloadPromise = FileSystem.downloadAsync(finalPdfUrl, fileUri);
-        const timeoutPromise = new Promise((_, reject) => 
+        const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Timeout: Le téléchargement a pris trop de temps (>30s)')), 30000)
         );
-        
+
         downloadResult = await Promise.race([downloadPromise, timeoutPromise]) as Awaited<ReturnType<typeof FileSystem.downloadAsync>>;
       } catch (downloadError: any) {
         // Si FileSystem.downloadAsync échoue, essayer avec axios (pour les URLs nécessitant des headers)
         console.warn('⚠️ FileSystem.downloadAsync a échoué, tentative avec axios:', downloadError.message);
-        
+
         try {
           // Télécharger avec axios (gère mieux les headers d'authentification)
           const response = await axios.get(finalPdfUrl, {
@@ -264,7 +264,7 @@ export default function PDFPreviewScreen() {
               'Accept': 'application/pdf',
             },
           });
-          
+
           // Convertir ArrayBuffer en base64 (méthode compatible React Native)
           const arrayBuffer = response.data;
           const uint8Array = new Uint8Array(arrayBuffer);
@@ -273,19 +273,19 @@ export default function PDFPreviewScreen() {
             binary += String.fromCharCode(uint8Array[i]);
           }
           const base64 = btoa(binary);
-          
+
           // Écrire le fichier en base64
           await FileSystem.writeAsStringAsync(fileUri, base64, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          
+
           // Créer un objet downloadResult compatible
           downloadResult = {
             status: response.status,
             uri: fileUri,
             headers: response.headers as any,
           };
-          
+
           console.log('✅ PDF téléchargé avec axios');
         } catch (axiosError: any) {
           console.error('❌ Erreur axios:', axiosError);
@@ -312,7 +312,7 @@ export default function PDFPreviewScreen() {
       // Vérifier que le fichier existe et a une taille valide
       const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
       console.log('📄 Informations du fichier:', fileInfo);
-      
+
       if (!fileInfo.exists) {
         throw new Error('Le fichier téléchargé n\'existe pas');
       }
@@ -323,25 +323,25 @@ export default function PDFPreviewScreen() {
 
       console.log('🖨️ Impression du fichier:', downloadResult.uri);
       console.log('   Taille du fichier:', fileInfo.size, 'bytes');
-      
+
       // Lancer l'impression
       const printResult = await Print.printAsync({
         uri: downloadResult.uri,
         html: undefined, // Utiliser uniquement l'URI, pas de HTML
       });
-      
+
       console.log('✅ Impression lancée:', printResult);
-      
+
       // Nettoyer le fichier temporaire après impression (optionnel)
       // On peut le laisser pour permettre une réimpression rapide
-      
+
     } catch (error: any) {
       console.error('❌ Erreur lors de l\'impression:', error);
       console.error('   Stack:', error.stack);
-      
+
       // Messages d'erreur plus précis
       let errorMessage = 'Impossible d\'imprimer le PDF.';
-      
+
       if (error.message?.includes('téléchargement') || error.message?.includes('download')) {
         errorMessage = 'Impossible de télécharger le PDF. Vérifiez votre connexion internet et réessayez.';
       } else if (error.message?.includes('connexion') || error.message?.includes('connection') || error.message?.includes('network')) {
@@ -355,7 +355,7 @@ export default function PDFPreviewScreen() {
       } else if (error.message) {
         errorMessage = `Erreur: ${error.message}`;
       }
-      
+
       Alert.alert('Erreur d\'impression', errorMessage, [
         {
           text: 'Réessayer',
@@ -384,10 +384,10 @@ export default function PDFPreviewScreen() {
     try {
       setIsActionLoading(true);
       console.log('📥 Téléchargement du PDF:', pdfUrl);
-      
+
       const fileName = `rapport-${Date.now()}.pdf`;
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      
+
       console.log('📥 Destination:', fileUri);
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
@@ -432,9 +432,9 @@ export default function PDFPreviewScreen() {
     try {
       setIsActionLoading(true);
       console.log('📝 Mise en brouillon du rapport:', reportId);
-      
+
       await reportApiService.updateReportStatus(reportId, 'draft');
-      
+
       console.log('✅ Rapport mis en brouillon');
       Alert.alert('Succès', 'Rapport mis en brouillon', [
         {
@@ -465,9 +465,9 @@ export default function PDFPreviewScreen() {
     try {
       setIsActionLoading(true);
       console.log('✅ Finalisation du rapport:', reportId);
-      
+
       await reportApiService.updateReportStatus(reportId, 'final');
-      
+
       console.log('✅ Rapport finalisé');
       Alert.alert('Succès', 'Rapport finalisé', [
         {
@@ -512,9 +512,9 @@ export default function PDFPreviewScreen() {
             try {
               setIsActionLoading(true);
               console.log('🗑️ Suppression du rapport:', reportId);
-              
+
               await reportApiService.deleteReport(reportId);
-              
+
               console.log('✅ Rapport supprimé avec succès');
               Alert.alert('Succès', 'Rapport supprimé définitivement', [
                 {
@@ -615,7 +615,7 @@ export default function PDFPreviewScreen() {
           >
             <Ionicons name="share-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => setShowActionsMenu(true)}
@@ -657,7 +657,7 @@ export default function PDFPreviewScreen() {
         ) : pdfUrl ? (
           <WebView
             ref={webViewRef}
-            source={{ 
+            source={{
               uri: pdfUrl,
               headers: {
                 'Accept': 'application/pdf',
@@ -669,20 +669,20 @@ export default function PDFPreviewScreen() {
             onHttpError={async (syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
               console.error('❌ Erreur HTTP WebView:', nativeEvent);
-              
+
               // Si erreur 400 ou 404, essayer de régénérer l'URL signée
               if ((nativeEvent.statusCode === 400 || nativeEvent.statusCode === 404) && reportId) {
                 console.log(`🔄 Erreur ${nativeEvent.statusCode} détectée, tentative de régénération de l'URL signée...`);
-                
+
                 try {
                   setIsLoading(true);
                   const newSignedUrl = await reportApiService.regenerateSignedUrl(reportId);
                   console.log('✅ Nouvelle URL signée obtenue, rechargement du PDF...');
-                  
+
                   // Mettre à jour l'URL et recharger
                   setPdfUrl(newSignedUrl);
                   setError(null);
-                  
+
                   // Recharger le WebView avec la nouvelle URL
                   if (webViewRef.current) {
                     webViewRef.current.reload();
@@ -750,7 +750,7 @@ export default function PDFPreviewScreen() {
               {/* Actions PDF */}
               <View style={styles.menuSection}>
                 <Text style={styles.menuSectionTitle}>Actions PDF</Text>
-                
+
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={handleOpenInBrowser}
@@ -799,7 +799,7 @@ export default function PDFPreviewScreen() {
                 <>
                   <View style={styles.menuSection}>
                     <Text style={styles.menuSectionTitle}>Gestion du rapport</Text>
-                    
+
                     <TouchableOpacity
                       style={styles.menuItem}
                       onPress={handleSaveAsDraft}

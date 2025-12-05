@@ -12,7 +12,7 @@ interface PendingRequest {
 
 class RateLimiter {
   private pendingRequests: Map<string, PendingRequest[]> = new Map();
-  private requestTimers: Map<string, NodeJS.Timeout> = new Map();
+  private requestTimers: Map<string, any> = new Map();
   private readonly minDelay: number = 500; // Délai minimum entre requêtes similaires (ms)
   private readonly maxDelay: number = 2000; // Délai maximum pour le debouncing (ms)
 
@@ -57,7 +57,7 @@ class RateLimiter {
     return new Promise((resolve, reject) => {
       const now = Date.now();
       const lastRequest = this.pendingRequests.get(key);
-      
+
       if (lastRequest && lastRequest.length > 0) {
         const lastTimestamp = lastRequest[lastRequest.length - 1].timestamp;
         const timeSinceLastRequest = now - lastTimestamp;
@@ -74,7 +74,7 @@ class RateLimiter {
         try {
           const result = await fn();
           resolve(result);
-          
+
           // Traiter les requêtes en attente
           const pending = this.pendingRequests.get(key);
           if (pending && pending.length > 0) {
@@ -87,7 +87,7 @@ class RateLimiter {
           }
         } catch (error) {
           reject(error);
-          
+
           // Rejeter toutes les requêtes en attente
           const pending = this.pendingRequests.get(key);
           if (pending) {
@@ -114,24 +114,24 @@ class RateLimiter {
     initialDelay: number = 1000
   ): Promise<T> {
     let lastError: any;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await fn();
       } catch (error: any) {
         lastError = error;
-        
+
         // Si c'est une erreur 429, attendre avant de réessayer
         if (error?.response?.status === 429 && attempt < maxRetries) {
           const delay = initialDelay * Math.pow(2, attempt); // Backoff exponentiel
           const retryAfter = error?.response?.headers?.['retry-after'];
           const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-          
+
           console.log(`⏳ Trop de requêtes (429), nouvelle tentative dans ${Math.round(waitTime / 1000)}s (tentative ${attempt + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
         }
-        
+
         // Si toutes les tentatives ont échoué avec une erreur 429, créer un message d'erreur plus clair
         if (error?.response?.status === 429 && attempt >= maxRetries) {
           const retryAfter = error?.response?.headers?.['retry-after'];
@@ -146,12 +146,12 @@ class RateLimiter {
           (friendlyError as any).isAxiosError = true;
           throw friendlyError;
         }
-        
+
         // Pour les autres erreurs ou si on a épuisé les tentatives
         throw error;
       }
     }
-    
+
     throw lastError;
   }
 

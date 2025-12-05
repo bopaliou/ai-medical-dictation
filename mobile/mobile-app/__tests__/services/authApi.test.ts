@@ -63,24 +63,24 @@ describe('authApiService', () => {
       });
 
       await expect(authApiService.login(mockCredentials)).rejects.toThrow(
-        'Réponse invalide du serveur'
+        'Une réponse inattendue a été reçue du serveur'
       );
     });
 
     it('devrait gérer les erreurs réseau', async () => {
-      mockedAxios.isAxiosError = jest.fn().mockReturnValue(true);
+      (mockedAxios.isAxiosError as unknown) = jest.fn().mockReturnValue(true);
       mockedAxios.post.mockRejectedValueOnce({
         code: 'ERR_NETWORK',
         response: undefined,
       });
 
       await expect(authApiService.login(mockCredentials)).rejects.toThrow(
-        'Impossible de se connecter au serveur'
+        'Oups ! Nous n\'arrivons pas à nous connecter au serveur'
       );
     });
 
     it('devrait gérer les erreurs 401 (non autorisé)', async () => {
-      mockedAxios.isAxiosError = jest.fn().mockReturnValue(true);
+      (mockedAxios.isAxiosError as unknown) = jest.fn().mockReturnValue(true);
       mockedAxios.post.mockRejectedValueOnce({
         response: {
           status: 401,
@@ -94,7 +94,7 @@ describe('authApiService', () => {
     });
 
     it('devrait gérer les erreurs 400 (mauvaise requête)', async () => {
-      mockedAxios.isAxiosError = jest.fn().mockReturnValue(true);
+      (mockedAxios.isAxiosError as unknown) = jest.fn().mockReturnValue(true);
       mockedAxios.post.mockRejectedValueOnce({
         response: {
           status: 400,
@@ -108,7 +108,7 @@ describe('authApiService', () => {
     });
 
     it('devrait gérer les erreurs 500 (erreur serveur)', async () => {
-      mockedAxios.isAxiosError = jest.fn().mockReturnValue(true);
+      (mockedAxios.isAxiosError as unknown) = jest.fn().mockReturnValue(true);
       mockedAxios.post.mockRejectedValueOnce({
         response: {
           status: 500,
@@ -117,12 +117,12 @@ describe('authApiService', () => {
       });
 
       await expect(authApiService.login(mockCredentials)).rejects.toThrow(
-        'Erreur serveur'
+        'Internal Server Error'
       );
     });
 
     it('devrait nettoyer les messages d\'erreur pour ne pas exposer les endpoints', async () => {
-      mockedAxios.isAxiosError = jest.fn().mockReturnValue(true);
+      (mockedAxios.isAxiosError as unknown) = jest.fn().mockReturnValue(true);
       mockedAxios.post.mockRejectedValueOnce({
         response: {
           status: 401,

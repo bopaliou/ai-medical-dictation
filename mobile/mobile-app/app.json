@@ -40,6 +40,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+  "splash": {
+    "image": "./assets/images/splashscreen_logo.png",
+    "backgroundColor": "#E8F1FF",
+    "resizeMode": "contain"
+  },
     "extra": {
     "API_BASE_URL": "http://172.238.81.245:3000"
     }

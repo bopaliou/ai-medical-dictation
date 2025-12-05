@@ -31,43 +31,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { fadeIn, slideUp, ANIMATION_DURATION } from '@/utils/animations';
 
 // Interface pour les détails du rapport
-interface ReportDetails {
-  id: string;
-  patient_id: string | null;
-  pdf_url: string;
-  created_at: string;
-  recorded_at?: string;
-  status: 'draft' | 'final' | 'trash';
-  patient: {
-    id: string | null;
-    full_name: string;
-    age: string | null;
-    gender: string | null;
-    room_number: string | null;
-    unit: string | null;
-  };
-  soapie: {
-    S?: string;
-    O?: {
-      vitals?: {
-        temperature?: string;
-        blood_pressure?: string;
-        heart_rate?: string;
-        respiratory_rate?: string;
-        spo2?: string;
-        glycemia?: string;
-      };
-      exam?: string;
-      labs?: string;
-      medications?: string[];
-    };
-    A?: string;
-    I?: string[] | string;
-    E?: string;
-    P?: string;
-  };
-  transcription?: string;
-}
+// Interface interne supprimée pour utiliser celle importée depuis @/services/reportApi
 
 export default function ReportDetailsScreen() {
   const router = useRouter();
@@ -80,11 +44,11 @@ export default function ReportDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
-  
+
   // Animations d'écran : fade + slide-up
   const screenOpacity = React.useRef(new Animated.Value(0)).current;
   const screenTranslateY = React.useRef(new Animated.Value(20)).current;
-  
+
   React.useEffect(() => {
     if (!isLoading && report) {
       Animated.parallel([
@@ -107,11 +71,11 @@ export default function ReportDetailsScreen() {
 
     try {
       setIsLoading(true);
-      
-      console.log(`📋 Récupération des détails du rapport: ${reportId}`);
+
+
       const reportDetails = await reportApiService.getReportDetails(reportId);
       setReport(reportDetails);
-      console.log('✅ Détails du rapport récupérés avec succès');
+
     } catch (error: any) {
       // Afficher un message d'erreur clair selon le type d'erreur
       if (error.message) {
@@ -135,8 +99,8 @@ export default function ReportDetailsScreen() {
             'Rapport non trouvé',
             'Ce rapport n\'existe pas ou a été supprimé. La liste sera actualisée.',
             [
-              { 
-                text: 'OK', 
+              {
+                text: 'OK',
                 onPress: () => {
                   // Retourner au dashboard et forcer le rechargement
                   router.replace('/(tabs)');
@@ -272,8 +236,8 @@ export default function ReportDetailsScreen() {
     try {
       setIsActionLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      console.log('📄 Ouverture du PDF:', report.pdf_url);
-      
+
+
       // Ouvrir dans le viewer intégré
       router.push({
         pathname: '/pdf-viewer',
@@ -301,8 +265,8 @@ export default function ReportDetailsScreen() {
 
     try {
       setIsActionLoading(true);
-      console.log('📤 Partage du PDF:', report.pdf_url);
-      
+
+
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Information', 'Le partage n\'est pas disponible sur cet appareil');
@@ -312,24 +276,21 @@ export default function ReportDetailsScreen() {
       // Télécharger le PDF temporairement pour le partage
       const fileName = `rapport-${report.patient.full_name.replace(/\s+/g, '-')}-${Date.now()}.pdf`;
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      
-      console.log('📥 Téléchargement du PDF pour partage...');
+
+
       const downloadResult = await FileSystem.downloadAsync(report.pdf_url, fileUri);
 
-      console.log('📥 Résultat du téléchargement:', {
-        status: downloadResult.status,
-        uri: downloadResult.uri,
-        headers: downloadResult.headers,
-      });
+
+
 
       if (downloadResult.status === 200 && downloadResult.uri) {
-        console.log('📤 Partage du fichier:', downloadResult.uri);
+
         await Sharing.shareAsync(downloadResult.uri, {
           mimeType: 'application/pdf',
           dialogTitle: 'Partager le rapport PDF',
           UTI: 'com.adobe.pdf', // Type uniforme pour iOS
         });
-        console.log('✅ Partage réussi');
+
       } else {
         throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
       }
@@ -339,7 +300,7 @@ export default function ReportDetailsScreen() {
       console.error('   Code:', error.code);
       Alert.alert(
         'Erreur',
-        error.message?.includes('téléchargement') 
+        error.message?.includes('téléchargement')
           ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
           : 'Impossible de partager le PDF. Vérifiez votre connexion.'
       );
@@ -359,9 +320,11 @@ export default function ReportDetailsScreen() {
 
     try {
       setIsActionLoading(true);
-      console.log('🖨️ Impression du PDF:', report.pdf_url);
+
 
       // Vérifier la disponibilité de l'impression (peut ne pas être disponible sur toutes les plateformes/versions)
+      // Note: Print.isAvailableAsync peut ne pas être disponible, on ignore la vérification
+      /*
       try {
         if (typeof Print.isAvailableAsync === 'function') {
           const isAvailable = await Print.isAvailableAsync();
@@ -374,35 +337,30 @@ export default function ReportDetailsScreen() {
         }
       } catch (checkError) {
         console.log('⚠️ Erreur lors de la vérification de disponibilité, continuation...', checkError);
-        // Continuer quand même, certaines plateformes peuvent ne pas avoir cette méthode
       }
+      */
 
       // Essayer d'abord d'imprimer directement depuis l'URL (plus rapide)
       try {
-        console.log('🖨️ Tentative d\'impression directe depuis l\'URL...');
+
         await Print.printAsync({
           uri: report.pdf_url,
         });
-        console.log('✅ Impression lancée depuis l\'URL');
+
         return;
       } catch (urlError: any) {
         console.log('⚠️ Impression directe échouée, téléchargement du fichier...', urlError.message);
-        
+
         // Si l'impression directe échoue, télécharger le fichier d'abord
         const fileName = `rapport-print-${Date.now()}.pdf`;
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-        
-        console.log('📥 Téléchargement du PDF pour impression...');
-        console.log('   URL source:', report.pdf_url);
-        console.log('   Destination:', fileUri);
-        
+
+
+
+
         const downloadResult = await FileSystem.downloadAsync(report.pdf_url, fileUri);
 
-        console.log('📥 Résultat du téléchargement:', {
-          status: downloadResult.status,
-          uri: downloadResult.uri,
-          headers: downloadResult.headers,
-        });
+
 
         if (downloadResult.status === 200 && downloadResult.uri) {
           // Vérifier que le fichier existe et a une taille valide
@@ -410,28 +368,27 @@ export default function ReportDetailsScreen() {
           if (!fileInfo.exists) {
             throw new Error('Le fichier téléchargé n\'existe pas');
           }
-          
+
           if (fileInfo.size === 0) {
             throw new Error('Le fichier téléchargé est vide');
           }
-          
-          console.log('   Taille du fichier:', fileInfo.size, 'bytes');
-          console.log('🖨️ Impression du fichier local:', downloadResult.uri);
-          
+
+
+
           // Utiliser le fichier local pour l'impression
           await Print.printAsync({
             uri: downloadResult.uri,
-            base64: false,
+            // base64: false, // Option non valide
           });
-          console.log('✅ Impression lancée depuis le fichier local');
-          
+
+
           // Nettoyer le fichier temporaire après un délai
           setTimeout(async () => {
             try {
               const fileExists = await FileSystem.getInfoAsync(downloadResult.uri);
               if (fileExists.exists) {
                 await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
-                console.log('🗑️ Fichier temporaire supprimé');
+
               }
             } catch (cleanupError) {
               console.warn('⚠️ Erreur lors du nettoyage du fichier temporaire:', cleanupError);
@@ -446,9 +403,9 @@ export default function ReportDetailsScreen() {
       console.error('   Message:', error.message);
       console.error('   Code:', error.code);
       console.error('   Stack:', error.stack);
-      
+
       let errorMessage = 'Impossible d\'imprimer le PDF.';
-      
+
       if (error.message?.includes('téléchargement') || error.message?.includes('download')) {
         errorMessage = 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.';
       } else if (error.message?.includes('network') || error.code === 'NETWORK_ERROR') {
@@ -458,7 +415,7 @@ export default function ReportDetailsScreen() {
       } else if (error.message?.includes('format') || error.message?.includes('invalid')) {
         errorMessage = 'Format de fichier invalide. Le PDF pourrait être corrompu.';
       }
-      
+
       Alert.alert('Erreur d\'impression', errorMessage);
     } finally {
       setIsActionLoading(false);
@@ -479,7 +436,7 @@ export default function ReportDetailsScreen() {
 
       const fileName = `rapport-${report.patient.full_name.replace(/\s+/g, '-')}-${Date.now()}.pdf`;
       const fileUri = FileSystem.documentDirectory + fileName;
-      
+
       const downloadResult = await FileSystem.downloadAsync(report.pdf_url, fileUri);
 
       if (downloadResult.status === 200) {
@@ -504,10 +461,10 @@ export default function ReportDetailsScreen() {
     try {
       setIsActionLoading(true);
       await reportApiService.updateReportStatus(report.id, newStatus);
-      
+
       // Rafraîchir les données pour mettre à jour l'affichage des boutons
       await fetchReportDetails();
-      
+
       // Ne pas afficher d'alerte pour éviter d'interrompre l'utilisateur
       // Le changement de bouton sera visible immédiatement après le rafraîchissement
     } catch (error: any) {
@@ -604,20 +561,20 @@ export default function ReportDetailsScreen() {
     description: string,
     content: any
   ) => {
-    if (!content || (typeof content === 'string' && !content.trim()) || 
-        (Array.isArray(content) && content.length === 0) ||
-        (typeof content === 'object' && Object.keys(content).length === 0)) {
+    if (!content || (typeof content === 'string' && !content.trim()) ||
+      (Array.isArray(content) && content.length === 0) ||
+      (typeof content === 'object' && Object.keys(content).length === 0)) {
       return null;
     }
 
     const sectionConfig = getSoapieConfig(sectionKey);
 
     return (
-      <View style={[styles.soapieCard, { 
+      <View style={[styles.soapieCard, {
         backgroundColor: theme.colors.backgroundCard,
         borderColor: theme.colors.borderCard,
       }]}>
-        <View style={[styles.soapieHeader, { 
+        <View style={[styles.soapieHeader, {
           backgroundColor: theme.resolved === 'dark' ? sectionConfig.bg + '40' : sectionConfig.bg + '15',
           borderBottomColor: theme.colors.border,
         }]}>
@@ -653,7 +610,7 @@ export default function ReportDetailsScreen() {
           {typeof content === 'object' && !Array.isArray(content) && (
             <View>
               {content.vitals && Object.keys(content.vitals).length > 0 && (
-                <View style={[styles.vitalsContainer, { 
+                <View style={[styles.vitalsContainer, {
                   backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
                   borderColor: theme.colors.border,
                 }]}>
@@ -763,7 +720,7 @@ export default function ReportDetailsScreen() {
                   </View>
                   <View style={styles.medicationsContainer}>
                     {content.medications.map((med: string, index: number) => (
-                      <View key={index} style={[styles.medicationItem, { 
+                      <View key={index} style={[styles.medicationItem, {
                         backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
                         borderColor: theme.colors.border,
                       }]}>
@@ -822,7 +779,7 @@ export default function ReportDetailsScreen() {
   }
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         { flex: 1 },
         {
@@ -833,7 +790,7 @@ export default function ReportDetailsScreen() {
     >
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
-        
+
         {/* Header moderne */}
         <ModernHeader
           title={`Rapport ${report.patient.full_name}`}
@@ -842,397 +799,397 @@ export default function ReportDetailsScreen() {
         />
 
         <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: 24 }]}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={fetchReportDetails}
-            tintColor={theme.colors.primary}
-          />
-        }
-      >
-        {/* Section Patient - Design moderne */}
-        <View style={[styles.patientCard, { 
-          backgroundColor: theme.colors.backgroundCard,
-          borderColor: theme.colors.borderCard,
-        }]}>
-          <View style={styles.patientGradient}>
-            <View style={styles.patientHeader}>
-              <View style={styles.patientHeaderInfo}>
-                <View style={styles.patientNameRow}>
-                  <View style={styles.patientNameContainer}>
-                    <Text style={[styles.patientName, { color: theme.colors.text }]}>{report.patient.full_name}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
-                      <Ionicons 
-                        name={report.status === 'final' ? 'checkmark-circle' : report.status === 'draft' ? 'create-outline' : 'trash-outline'} 
-                        size={12} 
-                        color="#FFFFFF" 
-                      />
-                      <Text style={styles.statusText}>{getStatusText(report.status)}</Text>
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: 24 }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={fetchReportDetails}
+              tintColor={theme.colors.primary}
+            />
+          }
+        >
+          {/* Section Patient - Design moderne */}
+          <View style={[styles.patientCard, {
+            backgroundColor: theme.colors.backgroundCard,
+            borderColor: theme.colors.borderCard,
+          }]}>
+            <View style={styles.patientGradient}>
+              <View style={styles.patientHeader}>
+                <View style={styles.patientHeaderInfo}>
+                  <View style={styles.patientNameRow}>
+                    <View style={styles.patientNameContainer}>
+                      <Text style={[styles.patientName, { color: theme.colors.text }]}>{report.patient.full_name}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
+                        <Ionicons
+                          name={report.status === 'final' ? 'checkmark-circle' : report.status === 'draft' ? 'create-outline' : 'trash-outline'}
+                          size={12}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.statusText}>{getStatusText(report.status)}</Text>
+                      </View>
                     </View>
                   </View>
+                  <View style={styles.patientInfoGrid}>
+                    {report.patient.age && (
+                      <View style={[styles.patientInfoItem, {
+                        backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                        borderColor: theme.colors.border,
+                      }]}>
+                        <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                          <Ionicons name="calendar" size={16} color={theme.colors.primary} />
+                        </View>
+                        <View style={styles.patientInfoTextContainer}>
+                          <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Âge</Text>
+                          <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.age} ans</Text>
+                        </View>
+                      </View>
+                    )}
+                    {report.patient.gender && (
+                      <View style={[styles.patientInfoItem, {
+                        backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                        borderColor: theme.colors.border,
+                      }]}>
+                        <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                          <Ionicons
+                            name={report.patient.gender.toLowerCase().includes('f') ? "female" : "male"}
+                            size={16}
+                            color={theme.colors.primary}
+                          />
+                        </View>
+                        <View style={styles.patientInfoTextContainer}>
+                          <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Genre</Text>
+                          <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.gender}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {report.patient.room_number && (
+                      <View style={[styles.patientInfoItem, {
+                        backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                        borderColor: theme.colors.border,
+                      }]}>
+                        <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                          <Ionicons name="bed" size={16} color={theme.colors.primary} />
+                        </View>
+                        <View style={styles.patientInfoTextContainer}>
+                          <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Chambre</Text>
+                          <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.room_number}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {report.patient.unit && (
+                      <View style={[styles.patientInfoItem, {
+                        backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                        borderColor: theme.colors.border,
+                      }]}>
+                        <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                          <Ionicons name="business" size={16} color={theme.colors.primary} />
+                        </View>
+                        <View style={styles.patientInfoTextContainer}>
+                          <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Unité</Text>
+                          <Text style={[styles.patientInfoValue, { color: theme.colors.text }]} numberOfLines={1}>{report.patient.unit}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.patientInfoGrid}>
-                  {report.patient.age && (
-                    <View style={[styles.patientInfoItem, { 
-                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                      borderColor: theme.colors.border,
-                    }]}>
-                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                        <Ionicons name="calendar" size={16} color={theme.colors.primary} />
-                      </View>
-                      <View style={styles.patientInfoTextContainer}>
-                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Âge</Text>
-                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.age} ans</Text>
-                      </View>
-                    </View>
-                  )}
-                  {report.patient.gender && (
-                    <View style={[styles.patientInfoItem, { 
-                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                      borderColor: theme.colors.border,
-                    }]}>
-                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                        <Ionicons 
-                          name={report.patient.gender.toLowerCase().includes('f') ? "female" : "male"} 
-                          size={16} 
-                          color={theme.colors.primary} 
-                        />
-                      </View>
-                      <View style={styles.patientInfoTextContainer}>
-                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Genre</Text>
-                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.gender}</Text>
-                      </View>
-                    </View>
-                  )}
-                  {report.patient.room_number && (
-                    <View style={[styles.patientInfoItem, { 
-                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                      borderColor: theme.colors.border,
-                    }]}>
-                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                        <Ionicons name="bed" size={16} color={theme.colors.primary} />
-                      </View>
-                      <View style={styles.patientInfoTextContainer}>
-                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Chambre</Text>
-                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]}>{report.patient.room_number}</Text>
-                      </View>
-                    </View>
-                  )}
-                  {report.patient.unit && (
-                    <View style={[styles.patientInfoItem, { 
-                      backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                      borderColor: theme.colors.border,
-                    }]}>
-                      <View style={[styles.patientInfoIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                        <Ionicons name="business" size={16} color={theme.colors.primary} />
-                      </View>
-                      <View style={styles.patientInfoTextContainer}>
-                        <Text style={[styles.patientInfoLabel, { color: theme.colors.textMuted }]}>Unité</Text>
-                        <Text style={[styles.patientInfoValue, { color: theme.colors.text }]} numberOfLines={1}>{report.patient.unit}</Text>
-                      </View>
-                    </View>
-                  )}
+              </View>
+              <View style={[styles.dateContainer, { borderTopColor: theme.colors.border }]}>
+                <Ionicons name="time" size={16} color={theme.colors.textMuted} />
+                <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>{formatDate(report.created_at)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Section SOAPIE - Design moderne avec explications */}
+          <View style={styles.soapieSection}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                  <Ionicons name="document-text" size={24} color={theme.colors.primary} />
+                </View>
+                <View>
+                  <Text style={styles.sectionTitle}>Résumé SOAPIE</Text>
+                  <Text style={styles.sectionSubtitle}>Méthode de documentation médicale structurée</Text>
                 </View>
               </View>
             </View>
-            <View style={[styles.dateContainer, { borderTopColor: theme.colors.border }]}>
-              <Ionicons name="time" size={16} color={theme.colors.textMuted} />
-              <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>{formatDate(report.created_at)}</Text>
-            </View>
-          </View>
-        </View>
 
-        {/* Section SOAPIE - Design moderne avec explications */}
-        <View style={styles.soapieSection}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="document-text" size={24} color={theme.colors.primary} />
-              </View>
-              <View>
-                <Text style={styles.sectionTitle}>Résumé SOAPIE</Text>
-                <Text style={styles.sectionSubtitle}>Méthode de documentation médicale structurée</Text>
-              </View>
-            </View>
+            {renderSOAPIESection(
+              'S',
+              'Subjective',
+              'Motif de consultation et symptômes rapportés par le patient',
+              report.soapie.S
+            )}
+            {renderSOAPIESection(
+              'O',
+              'Objective',
+              'Observations cliniques, signes vitaux et examens objectifs',
+              report.soapie.O
+            )}
+            {renderSOAPIESection(
+              'A',
+              'Assessment',
+              'Évaluation et diagnostic basé sur les données S et O',
+              report.soapie.A
+            )}
+            {renderSOAPIESection(
+              'I',
+              'Intervention',
+              'Actions thérapeutiques et traitements administrés',
+              report.soapie.I
+            )}
+            {renderSOAPIESection(
+              'E',
+              'Evaluation',
+              'Évaluation de la réponse du patient aux interventions',
+              report.soapie.E
+            )}
+            {renderSOAPIESection(
+              'P',
+              'Plan',
+              'Plan de suivi et prochaines étapes de prise en charge',
+              report.soapie.P
+            )}
           </View>
-          
-          {renderSOAPIESection(
-            'S',
-            'Subjective',
-            'Motif de consultation et symptômes rapportés par le patient',
-            report.soapie.S
-          )}
-          {renderSOAPIESection(
-            'O',
-            'Objective',
-            'Observations cliniques, signes vitaux et examens objectifs',
-            report.soapie.O
-          )}
-          {renderSOAPIESection(
-            'A',
-            'Assessment',
-            'Évaluation et diagnostic basé sur les données S et O',
-            report.soapie.A
-          )}
-          {renderSOAPIESection(
-            'I',
-            'Intervention',
-            'Actions thérapeutiques et traitements administrés',
-            report.soapie.I
-          )}
-          {renderSOAPIESection(
-            'E',
-            'Evaluation',
-            'Évaluation de la réponse du patient aux interventions',
-            report.soapie.E
-          )}
-          {renderSOAPIESection(
-            'P',
-            'Plan',
-            'Plan de suivi et prochaines étapes de prise en charge',
-            report.soapie.P
-          )}
-        </View>
 
-        {/* Section PDF Actions - Design moderne */}
-        <View style={[styles.actionsSection, { 
-          backgroundColor: theme.colors.backgroundCard,
-          borderRadius: 16,
-          padding: 20,
-          borderWidth: 1,
-          borderColor: theme.colors.borderCard,
-        }]}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="document-attach" size={24} color={theme.colors.primary} />
-              </View>
-              <View>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Document PDF</Text>
-                <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>Consulter, partager ou imprimer le rapport</Text>
+          {/* Section PDF Actions - Design moderne */}
+          <View style={[styles.actionsSection, {
+            backgroundColor: theme.colors.backgroundCard,
+            borderRadius: 16,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: theme.colors.borderCard,
+          }]}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                  <Ionicons name="document-attach" size={24} color={theme.colors.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Document PDF</Text>
+                  <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>Consulter, partager ou imprimer le rapport</Text>
+                </View>
               </View>
             </View>
-          </View>
-          
-          <TouchableOpacity
-            style={[styles.primaryButton, { 
-              backgroundColor: theme.colors.primary,
-            }]}
-            onPress={handleOpenPDF}
-            disabled={isActionLoading || !report.pdf_url}
-            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.primaryButtonIcon}>
-              <Ionicons name="document-text" size={24} color="#FFFFFF" />
-            </View>
-            <View style={styles.primaryButtonContent}>
-              <Text style={styles.primaryButtonText}>Ouvrir le PDF</Text>
-              <Text style={styles.primaryButtonSubtext}>Visualiser le rapport complet</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" style={{ opacity: 0.7 }} />
-          </TouchableOpacity>
 
-          <View style={styles.secondaryActions}>
             <TouchableOpacity
-              style={[styles.secondaryButton, {
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                borderColor: theme.colors.border,
+              style={[styles.primaryButton, {
+                backgroundColor: theme.colors.primary,
               }]}
-              onPress={handleSharePDF}
+              onPress={handleOpenPDF}
               disabled={isActionLoading || !report.pdf_url}
               onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
-              <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="share-social" size={22} color={theme.colors.primary} />
+              <View style={styles.primaryButtonIcon}>
+                <Ionicons name="document-text" size={24} color="#FFFFFF" />
               </View>
-              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Partager</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.secondaryButton, {
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                borderColor: theme.colors.border,
-              }]}
-              onPress={handlePrintPDF}
-              disabled={isActionLoading || !report.pdf_url}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="print" size={22} color={theme.colors.primary} />
+              <View style={styles.primaryButtonContent}>
+                <Text style={styles.primaryButtonText}>Ouvrir le PDF</Text>
+                <Text style={styles.primaryButtonSubtext}>Visualiser le rapport complet</Text>
               </View>
-              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Imprimer</Text>
+              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" style={{ opacity: 0.7 }} />
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.secondaryButton, {
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-                borderColor: theme.colors.border,
-              }]}
-              onPress={handleDownloadPDF}
-              disabled={isActionLoading || !report.pdf_url}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="download" size={22} color={theme.colors.primary} />
-              </View>
-              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Télécharger</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Section Actions Statut - Design moderne */}
-        <View style={[styles.statusActionsSection, {
-          backgroundColor: theme.colors.backgroundCard,
-          borderRadius: 16,
-          padding: 20,
-          borderWidth: 1,
-          borderColor: theme.colors.borderCard,
-        }]}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="settings" size={24} color={theme.colors.primary} />
-              </View>
-              <View>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Gestion du rapport</Text>
-                <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>Modifier le statut ou éditer le contenu</Text>
-              </View>
+            <View style={styles.secondaryActions}>
+              <TouchableOpacity
+                style={[styles.secondaryButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                  borderColor: theme.colors.border,
+                }]}
+                onPress={handleSharePDF}
+                disabled={isActionLoading || !report.pdf_url}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                  <Ionicons name="share-social" size={22} color={theme.colors.primary} />
+                </View>
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Partager</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                  borderColor: theme.colors.border,
+                }]}
+                onPress={handlePrintPDF}
+                disabled={isActionLoading || !report.pdf_url}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                  <Ionicons name="print" size={22} color={theme.colors.primary} />
+                </View>
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Imprimer</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                  borderColor: theme.colors.border,
+                }]}
+                onPress={handleDownloadPDF}
+                disabled={isActionLoading || !report.pdf_url}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.secondaryButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                  <Ionicons name="download" size={22} color={theme.colors.primary} />
+                </View>
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Télécharger</Text>
+              </TouchableOpacity>
             </View>
           </View>
-          
-          {/* Bouton Modifier */}
-          <TouchableOpacity
-            style={[styles.statusButton, {
-              backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
-              borderColor: theme.colors.primary,
-            }]}
-            onPress={handleEditReport}
-            disabled={isActionLoading}
-            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
-              <Ionicons name="create" size={20} color={theme.colors.primary} />
+
+          {/* Section Actions Statut - Design moderne */}
+          <View style={[styles.statusActionsSection, {
+            backgroundColor: theme.colors.backgroundCard,
+            borderRadius: 16,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: theme.colors.borderCard,
+          }]}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <View style={[styles.sectionIconContainer, { backgroundColor: theme.colors.primaryLight }]}>
+                  <Ionicons name="settings" size={24} color={theme.colors.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Gestion du rapport</Text>
+                  <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>Modifier le statut ou éditer le contenu</Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.statusButtonContent}>
-              <Text style={[styles.statusButtonText, { color: theme.colors.primary }]}>Modifier le rapport</Text>
-              <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Éditer les informations SOAPIE</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.colors.primary} />
-          </TouchableOpacity>
-          
-          {report.status !== 'draft' && (
-            <TouchableOpacity
-              style={[styles.statusButton, { 
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFFBF5',
-                borderColor: theme.colors.warning,
-              }]}
-              onPress={() => handleUpdateStatus('draft')}
-              disabled={isActionLoading}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.warningLight }]}>
-                <Ionicons name="save" size={20} color={theme.colors.warning} />
-              </View>
-              <View style={styles.statusButtonContent}>
-                <Text style={[styles.statusButtonText, { color: theme.colors.warning }]}>Mettre en brouillon</Text>
-                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Conserver comme brouillon</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          
-          {report.status !== 'final' && (
-            <TouchableOpacity
-              style={[styles.statusButton, { 
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F0F9F4',
-                borderColor: theme.colors.success,
-              }]}
-              onPress={() => handleUpdateStatus('final')}
-              disabled={isActionLoading}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.successLight }]}>
-                <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
-              </View>
-              <View style={styles.statusButtonContent}>
-                <Text style={[styles.statusButtonText, { color: theme.colors.success }]}>
-                  {report.status === 'trash' ? 'Restaurer' : 'Finaliser'}
-                </Text>
-                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>
-                  {report.status === 'trash' ? 'Restaurer le rapport' : 'Marquer comme finalisé'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          
-          {report.status !== 'trash' && (
-            <TouchableOpacity
-              style={[styles.statusButton, { 
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFF5F5',
-                borderColor: theme.colors.error,
-              }]}
-              onPress={() => handleUpdateStatus('trash')}
-              disabled={isActionLoading}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.errorLight }]}>
-                <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
-              </View>
-              <View style={styles.statusButtonContent}>
-                <Text style={[styles.statusButtonText, { color: theme.colors.error }]}>Mettre à la corbeille</Text>
-                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Déplacer vers la corbeille</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          
-          {report.status === 'trash' && (
+
+            {/* Bouton Modifier */}
             <TouchableOpacity
               style={[styles.statusButton, {
-                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFEBEE',
-                borderColor: theme.colors.error,
+                backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F8F9FA',
+                borderColor: theme.colors.primary,
               }]}
-              onPress={handleDeletePermanently}
+              onPress={handleEditReport}
               disabled={isActionLoading}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}
+              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
               activeOpacity={0.7}
             >
-              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.errorLight }]}>
-                <Ionicons name="trash" size={20} color={theme.colors.error} />
+              <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="create" size={20} color={theme.colors.primary} />
               </View>
               <View style={styles.statusButtonContent}>
-                <Text style={[styles.statusButtonText, { color: theme.colors.error }]}>Supprimer définitivement</Text>
-                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Cette action est irréversible</Text>
+                <Text style={[styles.statusButtonText, { color: theme.colors.primary }]}>Modifier le rapport</Text>
+                <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Éditer les informations SOAPIE</Text>
               </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.primary} />
             </TouchableOpacity>
-          )}
-        </View>
 
-        {/* Bouton Retour */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.push('/(tabs)/rapports')}
-          disabled={isActionLoading}
-        >
-          <Text style={styles.backButtonText}>Retour aux rapports</Text>
-        </TouchableOpacity>
-      </ScrollView>
+            {report.status !== 'draft' && (
+              <TouchableOpacity
+                style={[styles.statusButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFFBF5',
+                  borderColor: theme.colors.warning,
+                }]}
+                onPress={() => handleUpdateStatus('draft')}
+                disabled={isActionLoading}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.warningLight }]}>
+                  <Ionicons name="save" size={20} color={theme.colors.warning} />
+                </View>
+                <View style={styles.statusButtonContent}>
+                  <Text style={[styles.statusButtonText, { color: theme.colors.warning }]}>Mettre en brouillon</Text>
+                  <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Conserver comme brouillon</Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
-      {/* Loading Overlay */}
-      {isActionLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      )}
-    </View>
+            {report.status !== 'final' && (
+              <TouchableOpacity
+                style={[styles.statusButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#F0F9F4',
+                  borderColor: theme.colors.success,
+                }]}
+                onPress={() => handleUpdateStatus('final')}
+                disabled={isActionLoading}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.successLight }]}>
+                  <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                </View>
+                <View style={styles.statusButtonContent}>
+                  <Text style={[styles.statusButtonText, { color: theme.colors.success }]}>
+                    {report.status === 'trash' ? 'Restaurer' : 'Finaliser'}
+                  </Text>
+                  <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>
+                    {report.status === 'trash' ? 'Restaurer le rapport' : 'Marquer comme finalisé'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {report.status !== 'trash' && (
+              <TouchableOpacity
+                style={[styles.statusButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFF5F5',
+                  borderColor: theme.colors.error,
+                }]}
+                onPress={() => handleUpdateStatus('trash')}
+                disabled={isActionLoading}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.errorLight }]}>
+                  <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
+                </View>
+                <View style={styles.statusButtonContent}>
+                  <Text style={[styles.statusButtonText, { color: theme.colors.error }]}>Mettre à la corbeille</Text>
+                  <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Déplacer vers la corbeille</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {report.status === 'trash' && (
+              <TouchableOpacity
+                style={[styles.statusButton, {
+                  backgroundColor: theme.resolved === 'dark' ? theme.colors.backgroundElevated : '#FFEBEE',
+                  borderColor: theme.colors.error,
+                }]}
+                onPress={handleDeletePermanently}
+                disabled={isActionLoading}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusButtonIcon, { backgroundColor: theme.colors.errorLight }]}>
+                  <Ionicons name="trash" size={20} color={theme.colors.error} />
+                </View>
+                <View style={styles.statusButtonContent}>
+                  <Text style={[styles.statusButtonText, { color: theme.colors.error }]}>Supprimer définitivement</Text>
+                  <Text style={[styles.statusButtonSubtext, { color: theme.colors.textMuted }]}>Cette action est irréversible</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Bouton Retour */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.push('/(tabs)/rapports')}
+            disabled={isActionLoading}
+          >
+            <Text style={styles.backButtonText}>Retour aux rapports</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Loading Overlay */}
+        {isActionLoading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        )}
+      </View>
     </Animated.View>
   );
 }

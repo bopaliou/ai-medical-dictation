@@ -145,7 +145,6 @@ export const scalePress = (
 ) => {
   return Animated.spring(animatedValue, {
     toValue: to,
-    duration,
     useNativeDriver: true,
     tension: 300,
     friction: 20,
@@ -162,7 +161,6 @@ export const scaleRelease = (
 ) => {
   return Animated.spring(animatedValue, {
     toValue: to,
-    duration,
     useNativeDriver: true,
     tension: 300,
     friction: 20,
@@ -209,7 +207,7 @@ export const fadeSlideUp = (
 ) => {
   opacity.setValue(0);
   translateY.setValue(distance);
-  
+
   return Animated.parallel([
     fadeIn(opacity, duration, delay),
     slideUp(translateY, distance, duration, delay),
@@ -227,7 +225,7 @@ export const fadeScale = (
 ) => {
   opacity.setValue(0);
   scale.setValue(from);
-  
+
   return Animated.parallel([
     fadeIn(opacity, duration),
     scaleIn(scale, from, 1, duration),
@@ -249,7 +247,7 @@ export const appear = (
   opacity.setValue(0);
   translateY.setValue(distance);
   scale.setValue(scaleFrom);
-  
+
   return Animated.parallel([
     fadeIn(opacity, duration, delay),
     slideUp(translateY, distance, duration, delay),

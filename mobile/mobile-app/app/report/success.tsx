@@ -33,8 +33,9 @@ export default function SuccessScreen() {
   const params = useLocalSearchParams();
 
   // Paramètres reçus (uniquement pour pdfUrl et reportId)
-  const pdfUrl = params.pdfUrl as string;
-  const reportId = params.report_id || params.noteId as string;
+  const pdfUrl = Array.isArray(params.pdfUrl) ? params.pdfUrl[0] : params.pdfUrl as string;
+  const reportParam = params.report_id || params.noteId;
+  const reportId = Array.isArray(reportParam) ? reportParam[0] : reportParam as string;
 
   // États
   const [isLoading, setIsLoading] = useState(false);
@@ -201,11 +202,14 @@ export default function SuccessScreen() {
     try {
       setIsLoading(true);
 
+      // Note: Print.isAvailableAsync n'est pas disponible dans toutes les versions, on tente l'impression directement
+      /*
       const isAvailable = await Print.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Information', 'L\'impression n\'est pas disponible sur cet appareil');
         return;
       }
+      */
 
       const fileUri = FileSystem.documentDirectory + `report-print-${Date.now()}.pdf`;
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
