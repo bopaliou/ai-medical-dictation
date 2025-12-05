@@ -24,11 +24,15 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { CreatePatientData } from '@/services/patientsApi';
 import ModernHeader from '@/components/ModernHeader';
 
+import { useTheme } from '@/contexts/ThemeContext';
+import { Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
+
 const { width } = Dimensions.get('window');
 
 export default function RecordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { theme } = useTheme();
 
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientData, setPatientData] = useState<CreatePatientData | null>(null);
@@ -40,6 +44,8 @@ export default function RecordScreen() {
   const timer = useTimer();
   const waveform = useWaveform();
   const recorder = useAudioRecorder();
+
+  // ... (Keep useEffect logic same as before, just omitting for brevity if I could, but I must replace the whole component to be safe or use partials carefully. I will include the unchanged useEffects to be safe)
 
   // Récupérer les paramètres de route
   useEffect(() => {
@@ -81,18 +87,11 @@ export default function RecordScreen() {
 
   const handleStartRecording = async () => {
     try {
-      // Demander les permissions si nécessaire
       if (recorder.hasPermission === false) {
         const granted = await recorder.requestPermissions();
-        if (!granted) {
-          return;
-        }
+        if (!granted) return;
       }
-
-      // Démarrer l'enregistrement
       await recorder.startRecording();
-
-      // Démarrer le timer et le waveform
       timer.start();
       waveform.start();
       setHasStarted(true);
@@ -104,29 +103,15 @@ export default function RecordScreen() {
   const handleStopRecording = async () => {
     try {
       console.log('🛑 Arrêt de l\'enregistrement demandé...');
-
-      // Arrêter l'enregistrement
       const audioUri = await recorder.stopRecording();
-
-      // Arrêter le timer et le waveform
       timer.stop();
       waveform.stop();
 
       if (!audioUri) {
-        console.error('❌ Aucun fichier audio enregistré');
-        Alert.alert(
-          'Erreur',
-          'Aucun fichier audio n\'a pu être récupéré. Veuillez réessayer.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Erreur', 'Aucun fichier audio n\'a pu être récupéré.', [{ text: 'OK' }]);
         return;
       }
 
-      console.log('✅ Fichier audio récupéré:', audioUri);
-      console.log('📤 Navigation vers l\'écran d\'édition...');
-
-      // Naviguer directement vers l'écran d'édition
-      // L'upload et la structuration se feront dans report/edit.tsx
       router.push({
         pathname: '/report/edit',
         params: {
@@ -138,55 +123,41 @@ export default function RecordScreen() {
       } as any);
     } catch (error: any) {
       console.error('❌ Erreur lors de l\'arrêt:', error);
-      Alert.alert(
-        'Erreur',
-        'Une erreur est survenue lors de l\'arrêt de l\'enregistrement. Veuillez réessayer.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Erreur', 'Une erreur est survenue.', [{ text: 'OK' }]);
     }
   };
 
   const handleCancel = () => {
     if (recorder.isRecording) {
-      // Si un enregistrement est en cours, demander confirmation
       Alert.alert(
         'Annuler l\'enregistrement',
-        'Un enregistrement est en cours. Voulez-vous vraiment annuler ? L\'enregistrement sera perdu.',
+        'Voulez-vous vraiment annuler ? L\'enregistrement sera perdu.',
         [
-          {
-            text: 'Continuer',
-            style: 'cancel',
-          },
+          { text: 'Continuer', style: 'cancel' },
           {
             text: 'Annuler',
             style: 'destructive',
             onPress: async () => {
               try {
-                // Arrêter l'enregistrement
                 await recorder.stopRecording();
                 timer.stop();
                 waveform.stop();
-              } catch (error) {
-                console.error('Erreur lors de l\'annulation:', error);
-              }
-              // Revenir au dashboard
+              } catch (error) { }
               router.replace('/(tabs)');
             },
           },
         ]
       );
     } else {
-      // Si aucun enregistrement n'est en cours, revenir directement
       router.replace('/(tabs)');
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style="auto" />
 
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        {/* Header moderne */}
         <ModernHeader
           title="Enregistrement"
           subtitle="Dictée vocale médicale"
@@ -194,29 +165,35 @@ export default function RecordScreen() {
           onBackPress={handleCancel}
         />
 
-        {/* Zone principale centrée */}
         <View style={styles.mainArea}>
-          {/* Timer */}
-          <Text style={styles.timer}>{timer.formattedTime}</Text>
+          {/* Timer - Typography Moderne */}
+          <Text style={[styles.timer, { color: theme.colors.text }]}>
+            {timer.formattedTime}
+          </Text>
 
-          {/* Bouton STOP */}
+          {/* Bouton STOP - Design Elegant */}
           <TouchableOpacity
-            style={styles.stopButtonContainer}
+            style={[styles.stopButtonContainer, {
+              shadowColor: theme.colors.error
+            }]}
             onPress={handleStopRecording}
             disabled={!recorder.isRecording}
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#FF6B6B', '#FF3B30'] as any}
+              colors={[theme.colors.error, theme.colors.error + 'D0'] as any}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.stopButton}
+              style={[styles.stopButton, { borderColor: theme.colors.background }]}
             >
-              <Text style={styles.stopButtonText}>STOP</Text>
+              <View style={styles.stopIcon} />
             </LinearGradient>
           </TouchableOpacity>
+          <Text style={[styles.stopLabel, { color: theme.colors.textSecondary }]}>
+            Appuyez pour terminer
+          </Text>
 
-          {/* Waveform animé */}
+          {/* Waveform animé - Dynamic Colors */}
           <View style={styles.waveformContainer}>
             {waveform.bars.map((bar, index) => (
               <Animated.View
@@ -224,9 +201,14 @@ export default function RecordScreen() {
                 style={[
                   styles.waveformBar,
                   {
+                    backgroundColor: index % 2 === 0 ? theme.colors.primary : theme.colors.success, // Alternance Bleu/Vert
                     height: bar.height.interpolate({
                       inputRange: [4, 100],
-                      outputRange: [8, 60],
+                      outputRange: [6, 50], // Amplitude ajustée
+                    }),
+                    opacity: bar.height.interpolate({
+                      inputRange: [4, 100],
+                      outputRange: [0.3, 1], // Opacité dynamique
                     }),
                   },
                 ]}
@@ -242,80 +224,49 @@ export default function RecordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
   },
   content: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F5F5F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    letterSpacing: -0.3,
-  },
-  settingsButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F5F5F7',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   mainArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 60,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.xxxl,
   },
   timer: {
-    fontSize: 32,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    letterSpacing: -0.5,
-    marginBottom: 80,
-    fontVariant: ['tabular-nums'], // Chiffres à largeur fixe
+    ...Typography.numberLarge,
+    fontSize: 48, // Très grand pour lisibilité
+    fontWeight: '300', // Light font for modern look
+    marginBottom: Spacing.xxxxxl,
+    fontVariant: ['tabular-nums'],
   },
   stopButtonContainer: {
-    marginBottom: 60,
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    marginBottom: Spacing.md,
+    ...Shadows.floating,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   stopButton: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 90, // Plus petit, plus élégant
+    height: 90,
+    borderRadius: 45,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  stopButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
+  stopIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  stopLabel: {
+    ...Typography.label,
+    marginBottom: Spacing.xxxxl,
+    opacity: 0.8,
   },
   waveformContainer: {
     flexDirection: 'row',
@@ -323,12 +274,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 80,
     width: width - 64,
-    gap: 4,
+    gap: 5,
   },
   waveformBar: {
-    width: 4,
-    backgroundColor: '#006CFF',
-    borderRadius: 2,
-    minHeight: 8,
+    width: 5,
+    borderRadius: 3,
+    minHeight: 6,
   },
 });

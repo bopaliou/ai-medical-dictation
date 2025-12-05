@@ -25,11 +25,13 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [showPatientModal, setShowPatientModal] = useState(false);
+
+  // Ref animations
   const scaleAnim = React.useRef(new Animated.Value(0.85)).current;
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
-  const shadowOpacityAnim = React.useRef(new Animated.Value(0.3)).current;
+  const glowAnim = React.useRef(new Animated.Value(0)).current; // New Opacity animation (Native)
   const isAnimating = React.useRef(false);
-  const shadowAnimRef = React.useRef<Animated.CompositeAnimation | null>(null);
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   // Animation d'apparition premium : fade + scale
   useEffect(() => {
@@ -41,104 +43,87 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+
+    // Boucle de pulsation subtile pour l'effet "Antigravity"
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseLoop.start();
+  }, [scaleAnim, opacityAnim, pulseAnim]);
 
   // Calculer la position du FAB au-dessus de la tab bar
-  // Hauteur tab bar = 56 (base) + 8 (padding top) + 8 (padding bottom) + safeAreaBottom
   const getBottomPosition = () => {
-    const tabBarBaseHeight = 56 + 8 + 8; // 72px
+    const tabBarBaseHeight = 56 + 8 + 8; // 72px base + padding
     const tabBarSafeArea = insets.bottom;
     const tabBarTotalHeight = tabBarBaseHeight + tabBarSafeArea;
-    const fabSpacing = 16; // Espace entre FAB et tab bar
+    const fabSpacing = 16;
     return tabBarTotalHeight + fabSpacing;
   };
 
-  // Écrans où le FAB ne doit pas être visible
   const hiddenScreens = ['onboarding', 'login', 'signup', 'record'];
   const currentScreen = segments[0] || '';
   const shouldHide = hiddenScreens.includes(currentScreen);
 
   const handlePress = () => {
-    // Éviter les appels multiples pendant l'animation
-    if (isAnimating.current) {
-      return;
-    }
+    if (isAnimating.current) return;
 
-    // Feedback haptique
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Marquer comme en cours d'animation
     isAnimating.current = true;
 
-    // Arrêter toute animation en cours sur scaleAnim et récupérer la valeur actuelle
-    scaleAnim.stopAnimation((currentValue) => {
-      // Réinitialiser à 1 avant de démarrer la nouvelle animation
+    // Animation scale (Swell)
+    scaleAnim.stopAnimation(() => {
       scaleAnim.setValue(1);
-      
-      // Animation swell premium : scale 1 → 1.08 → 1
       const swellAnimation = swell(scaleAnim, 1.08, ANIMATION_DURATION.FAB);
-      swellAnimation.start((finished) => {
-        // Réinitialiser le flag quand l'animation est terminée (ou interrompue)
+      swellAnimation.start(() => {
         isAnimating.current = false;
       });
     });
-    
-    // Animation de l'ombre (subtile) - doit être arrêtée proprement
-    // Arrêter l'animation précédente si elle existe
-    if (shadowAnimRef.current) {
-      shadowAnimRef.current.stop();
-      shadowAnimRef.current = null;
-    }
-    
-    // Récupérer la valeur actuelle sans callback pour éviter les conflits
-    let currentShadowValue = 0.3;
-    shadowOpacityAnim.stopAnimation();
-    
-    // Utiliser setValue directement après avoir arrêté l'animation
-    shadowOpacityAnim.setValue(currentShadowValue);
-    
-    // Créer la nouvelle animation
-    const shadowAnimation = Animated.sequence([
-      Animated.timing(shadowOpacityAnim, {
-        toValue: 0.5,
+
+    // Animation Glow (Native Opacity)
+    glowAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(glowAnim, {
+        toValue: 0.6, // Semi-transparent glow
         duration: ANIMATION_DURATION.FAB / 2,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
-      Animated.timing(shadowOpacityAnim, {
-        toValue: 0.3,
+      Animated.timing(glowAnim, {
+        toValue: 0,
         duration: ANIMATION_DURATION.FAB / 2,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
-    ]);
-    
-    // Stocker la référence de l'animation
-    shadowAnimRef.current = shadowAnimation;
-    shadowAnimation.start(() => {
-      shadowAnimRef.current = null;
-    });
+    ]).start();
 
     if (onPress) {
       onPress();
     } else {
-      // Ouvrir le modal de sélection de patient
       setShowPatientModal(true);
     }
   };
 
   const handlePatientSelected = (result: PatientSelectionResult) => {
     setShowPatientModal(false);
-    
-    // Construire les paramètres de route
     const params: Record<string, string> = {
       patientId: result.patientId || '',
       skip: result.skip ? 'true' : 'false',
     };
-    
+
     if (result.patientData) {
       params.patientData = JSON.stringify(result.patientData);
     }
-    
-    // Navigation vers l'écran d'enregistrement avec les paramètres
+
+    // Delai pour laisser l'animation de modal se terminer
     setTimeout(() => {
       router.push({
         pathname: '/record',
@@ -147,9 +132,7 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
     }, 300);
   };
 
-  if (shouldHide) {
-    return null;
-  }
+  if (shouldHide) return null;
 
   return (
     <>
@@ -158,27 +141,45 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
           styles.container,
           {
             bottom: getBottomPosition(),
-            opacity: opacityAnim,
             transform: [{ scale: scaleAnim }],
+            opacity: opacityAnim,
           },
         ]}
       >
+        {/* Glow Layer - Behind button */}
         <Animated.View
           style={[
-            styles.button, 
-            { 
+            styles.button,
+            {
+              position: 'absolute',
               backgroundColor: theme.colors.fabBackground,
-              shadowOpacity: shadowOpacityAnim,
+              opacity: glowAnim, // Animate transparency (Native)
+              transform: [{ scale: pulseAnim }], // Pulse with button
+              shadowColor: theme.colors.fabBackground,
+              shadowOpacity: 0.8, // Stronger shadow for glow
+              shadowRadius: 20,
+              elevation: 0, // No elevation to prevent overlay issues on Android
+            },
+          ]}
+        />
+
+        {/* Main Button */}
+        <Animated.View
+          style={[
+            styles.button,
+            {
+              backgroundColor: theme.colors.fabBackground,
+              transform: [{ scale: pulseAnim }],
+              shadowColor: theme.colors.fabBackground,
+              shadowOpacity: 0.3, // Normal shadow
+              shadowRadius: 8,
             },
           ]}
         >
           <TouchableOpacity
             style={styles.buttonInnerTouchable}
             onPress={handlePress}
-            activeOpacity={0.8}
-            accessibilityLabel="Nouvelle dictée"
-            accessibilityRole="button"
-            accessibilityHint="Démarrer une nouvelle dictée médicale"
+            activeOpacity={1}
           >
             <View style={styles.buttonInner}>
               <Ionicons name="mic" size={32} color={theme.colors.fabIcon} />
@@ -187,7 +188,6 @@ export default function FloatingActionButton({ onPress }: FloatingActionButtonPr
         </Animated.View>
       </Animated.View>
 
-      {/* Modal de sélection de patient */}
       <PatientSelectionModal
         visible={showPatientModal}
         onClose={() => setShowPatientModal(false)}
@@ -204,16 +204,13 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   button: {
-    width: 72, // Agrandi de 56px à 72px
+    width: 72,
     height: 72,
     borderRadius: BorderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadows.xl,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 12,
-    // shadowOpacity sera animé dynamiquement
+    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   buttonInnerTouchable: {
     width: '100%',

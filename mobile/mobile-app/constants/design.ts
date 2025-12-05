@@ -5,58 +5,58 @@
  */
 
 export const Colors = {
-  // Palette KadduCare officielle
-  // Bleu médical moderne - Couleur principale de la marque
-  primary: '#0A84FF',           // Bleu KadduCare principal
-  primaryLight: '#E8F1FF',      // Bleu clair pour backgrounds et accents légers
-  primaryDark: '#0051D5',        // Bleu foncé premium pour contrastes et profondeur
-  primaryGradient: ['#0A84FF', '#0051D5'], // Dégradé bleu KadduCare
-  
-  // Vert santé - Pour validations et statuts positifs
-  success: '#34C759',            // Vert santé KadduCare
-  successLight: '#E8F5E9',       // Vert très clair pour backgrounds
-  successDark: '#28A745',        // Vert foncé pour contrastes
-  
-  // Rouge - Pour erreurs et actions destructives
-  error: '#FF3B30',              // Rouge propre pour erreurs/suppression
-  errorLight: '#FFEBEE',         // Rouge très clair pour backgrounds
-  
-  // Orange - Pour avertissements
-  warning: '#FF9500',            // Orange pour avertissements
-  warningLight: '#FFF3E0',       // Orange très clair
-  
-  // Neutres KadduCare
-  background: '#F5F5F7',         // Gris propre (fond principal)
-  backgroundCard: '#FFFFFF',     // Blanc pur pour cartes
-  backgroundSecondary: '#FAFAFA', // Gris très clair pour séparations
-  backgroundElevated: '#FFFFFF',  // Blanc pour éléments élevés
-  
-  // Textes
-  text: '#1B1B1D',               // Noir profond (texte principal)
-  textSecondary: '#4A4A4A',      // Sous-texte
-  textMuted: '#8E8E93',          // Texte discret
-  textLight: '#C7C7CC',          // Texte très discret
-  
+  // Palette KadduCare officielle - Antigravity Redesign
+  // Bleu Royal - Confiance et autorité
+  primary: '#258bef',
+  primaryLight: '#EFF6FF',
+  primaryDark: '#1d4ed8',
+  primaryGradient: ['#258bef', '#1d4ed8'],
+
+  // Vitality Green - Vie et validation (Action principale)
+  success: '#22c55e',
+  successLight: '#F0FDF4',
+  successDark: '#15803d',
+
+  // Rouge - Erreurs
+  error: '#EF4444',
+  errorLight: '#FEF2F2',
+
+  // Orange - Avertissements
+  warning: '#F59E0B',
+  warningLight: '#FFFBEB',
+
+  // Neutres - Slate pour le "Weightless feel"
+  background: '#F8FAFC',
+  backgroundCard: '#FFFFFF',
+  backgroundSecondary: '#F1F5F9',
+  backgroundElevated: '#FFFFFF',
+
+  // Textes - Slate Contrasté
+  text: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
+  textLight: '#CBD5E1',
+
   // Bordures
-  border: '#E5E5EA',             // Bordure standard
-  borderLight: '#F0F0F0',         // Bordure très légère
-  borderCard: '#E5E5EA',         // Bordure pour cartes
-  
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
+  borderCard: '#F1F5F9',
+
   // Overlay
-  overlay: 'rgba(0, 0, 0, 0.4)', // Overlay pour modals
-  
-  // Statuts KadduCare
+  overlay: 'rgba(15, 23, 42, 0.4)',
+
+  // Statuts
   status: {
-    draft: '#8E8E93',            // Gris pour brouillon
-    final: '#34C759',            // Vert KadduCare pour finalisé
-    trash: '#FF3B30',            // Rouge pour corbeille
+    draft: '#94A3B8',
+    final: '#22c55e',
+    trash: '#EF4444',
   }
 };
 
 export const Typography = {
   // Typographie KadduCare - Hiérarchie moderne et professionnelle
   // Police recommandée : Inter ou système (San Francisco sur iOS, Roboto sur Android)
-  
+
   // Titres principaux
   h1: {
     fontSize: 32,
@@ -82,7 +82,7 @@ export const Typography = {
     lineHeight: 28,
     letterSpacing: -0.2,
   },
-  
+
   // Sous-titres
   subtitle: {
     fontSize: 18,
@@ -96,7 +96,7 @@ export const Typography = {
     lineHeight: 24,
     letterSpacing: 0,
   },
-  
+
   // Corps de texte
   body: {
     fontSize: 16,
@@ -116,7 +116,7 @@ export const Typography = {
     lineHeight: 20,
     letterSpacing: 0.1,
   },
-  
+
   // Labels et boutons
   label: {
     fontSize: 14,
@@ -130,7 +130,7 @@ export const Typography = {
     lineHeight: 18,
     letterSpacing: 0.1,
   },
-  
+
   // Captions et métadonnées
   caption: {
     fontSize: 12,
@@ -144,7 +144,7 @@ export const Typography = {
     lineHeight: 14,
     letterSpacing: 0.2,
   },
-  
+
   // Chiffres et statistiques
   number: {
     fontSize: 28,

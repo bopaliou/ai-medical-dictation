@@ -25,6 +25,7 @@ import { reportApiService, StructuredJson, SOAPIEStructure } from '@/services/re
 import { uploadApiService } from '@/services/uploadApi';
 import ModernHeader from '@/components/ModernHeader';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Typography, Spacing, BorderRadius, Shadows } from '@/constants/design';
 
 interface SOAPIESection {
   key: keyof SOAPIEStructure;
@@ -923,11 +924,16 @@ export default function ReportEditScreen() {
           {SOAPIE_SECTIONS.map((section) => renderSOAPIESection(section))}
 
           {/* Bouton CTA */}
+          {/* Bouton CTA - Vitality Green */}
           <TouchableOpacity
             style={[
               styles.generateButton,
-              { backgroundColor: theme.colors.primary },
-              isGenerating && { backgroundColor: theme.colors.primary + '80' }
+              {
+                backgroundColor: theme.colors.success, // Vitality Green pour l'action principale
+                ...Shadows.button, // Ombre portée
+                shadowColor: theme.colors.success,
+              },
+              isGenerating && { backgroundColor: theme.colors.success + '80' }
             ]}
             onPress={handleGeneratePDF}
             disabled={isGenerating}
@@ -940,7 +946,7 @@ export default function ReportEditScreen() {
               </>
             ) : (
               <>
-                <Ionicons name="document-text" size={20} color="#FFFFFF" />
+                <Ionicons name="document-text" size={22} color="#FFFFFF" />
                 <Text style={styles.generateButtonText}>Générer le rapport PDF</Text>
               </>
             )}
@@ -1001,11 +1007,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   sectionCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: BorderRadius.card,
+    padding: Spacing.cardPadding,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
-    // backgroundColor et borderColor appliqués dynamiquement
+    ...Shadows.card, // Ajouter de l'ombre pour le relief
   },
   sectionHeader: {
     flexDirection: 'row',
