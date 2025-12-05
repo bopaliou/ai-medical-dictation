@@ -555,8 +555,9 @@ router.post('/generate', authenticate, async (req, res) => {
       }
     }
     
-    // Fusionner les données : Priorité aux données extraites de l'audio (structured_json.patient)
-    // car elles sont directement issues de la dictée et donc les plus récentes et complètes
+    // FONCTION CRITIQUE : Utiliser UNIQUEMENT les données du formulaire (structured_json.patient)
+    // Ces données représentent la dernière version modifiée par l'utilisateur
+    // Ne JAMAIS compléter avec la DB si les données du formulaire sont présentes
     patient = {};
     
     // Fonction helper pour vérifier si une valeur est valide (non vide)
@@ -568,49 +569,63 @@ router.post('/generate', authenticate, async (req, res) => {
       return true;
     };
     
-    // PRIORITÉ 1: Utiliser les données extraites de l'audio (structured_json.patient)
-    // Ces données sont directement issues de la dictée et donc les plus fiables
-    if (structured_json.patient) {
+    // PRIORITÉ ABSOLUE 1: Utiliser les données du formulaire (structured_json.patient)
+    // Ces données sont la source de vérité car elles représentent les modifications de l'utilisateur
+    if (structured_json && structured_json.patient) {
+      // Copier TOUTES les valeurs de structured_json.patient, même si vides
+      // Car une valeur vide peut être intentionnelle (l'utilisateur a vidé le champ)
       for (const key in structured_json.patient) {
         const value = structured_json.patient[key];
-        if (isValidValue(value)) {
-          patient[key] = typeof value === 'string' ? value.trim() : value;
-          console.log(`   ✅ ${key} depuis audio: "${patient[key]}"`);
-        }
+        // Accepter toutes les valeurs, même vides, car elles viennent du formulaire
+        patient[key] = typeof value === 'string' ? value.trim() : (value || '');
+        console.log(`   ✅ ${key} depuis formulaire: "${patient[key]}"`);
       }
-      console.log('   Base: Patient initialisé depuis données audio (priorité)');
+      console.log('   ✅ Base: Patient initialisé depuis données du formulaire (source de vérité)');
     }
     
-    // PRIORITÉ 2: Compléter avec les données de la DB pour les champs manquants
-    // La DB sert de complément, pas de source principale
-    if (patientFromDB) {
-      // Pour full_name : utiliser DB seulement si audio n'a pas fourni de nom valide
-      if (!isValidValue(patient.full_name) && isValidValue(patientFromDB.full_name)) {
+    // PRIORITÉ 2: Compléter UNIQUEMENT les champs ABSENTS (pas dans structured_json.patient)
+    // Ne JAMAIS écraser une valeur du formulaire, même si elle est vide
+    if (patientFromDB && structured_json && structured_json.patient) {
+      // Vérifier quels champs sont ABSENTS de structured_json.patient (pas juste vides)
+      const fieldsInForm = Object.keys(structured_json.patient);
+      
+      // Pour full_name : utiliser DB seulement si le champ n'existe PAS dans le formulaire
+      if (!fieldsInForm.includes('full_name') && isValidValue(patientFromDB.full_name)) {
         patient.full_name = patientFromDB.full_name;
-        console.log(`   ✅ full_name complété depuis DB: "${patient.full_name}"`);
+        console.log(`   ✅ full_name complété depuis DB (absent du formulaire): "${patient.full_name}"`);
       }
       
-      // Pour age : utiliser DB.dob si audio n'a pas fourni d'âge
-      if (!isValidValue(patient.age) && patientFromDB.dob) {
+      // Pour age : utiliser DB.dob seulement si le champ n'existe PAS dans le formulaire
+      if (!fieldsInForm.includes('age') && patientFromDB.dob) {
         const ageFromDB = calculateAge(patientFromDB.dob);
         if (ageFromDB) {
           patient.age = ageFromDB;
-          console.log(`   ✅ age complété depuis DB.dob: "${patient.age}"`);
+          console.log(`   ✅ age complété depuis DB.dob (absent du formulaire): "${patient.age}"`);
         }
       }
       
-      // Pour les autres champs : compléter seulement si manquants
+      // Pour les autres champs : compléter seulement si ABSENTS du formulaire
       ['gender', 'room_number', 'unit'].forEach(key => {
-        if (!isValidValue(patient[key]) && isValidValue(patientFromDB[key])) {
+        if (!fieldsInForm.includes(key) && isValidValue(patientFromDB[key])) {
           patient[key] = patientFromDB[key];
-          console.log(`   ✅ ${key} complété depuis DB: "${patient[key]}"`);
+          console.log(`   ✅ ${key} complété depuis DB (absent du formulaire): "${patient[key]}"`);
         }
       });
       
-      console.log('   Complément: Données DB utilisées pour compléter les champs manquants');
+      console.log('   Complément: Données DB utilisées UNIQUEMENT pour les champs absents du formulaire');
+    } else if (patientFromDB && (!structured_json || !structured_json.patient)) {
+      // Si structured_json.patient n'existe pas du tout, utiliser la DB comme fallback
+      console.log('   ⚠️ structured_json.patient absent, utilisation de la DB comme fallback');
+      patient = {
+        full_name: patientFromDB.full_name || 'Patient Inconnu',
+        age: patientFromDB.dob ? calculateAge(patientFromDB.dob) : '',
+        gender: patientFromDB.gender || '',
+        room_number: patientFromDB.room_number || '',
+        unit: patientFromDB.unit || ''
+      };
     }
     
-    // Fallback final : utiliser note.structured_json.patient si disponible
+    // Fallback final : utiliser note.structured_json.patient seulement si aucune autre source
     if ((!patient || Object.keys(patient).length === 0) && note && note.structured_json?.patient) {
       patient = { ...note.structured_json.patient };
       console.log('   Fallback: Utilisation de note.structured_json.patient');

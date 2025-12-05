@@ -58,7 +58,7 @@ class NotesApiService {
     try {
       const token = await this.getAuthToken();
       if (!token) {
-        throw new Error('Non authentifié - Token manquant. Veuillez vous reconnecter.');
+        throw new Error('Votre session a expiré. Veuillez vous reconnecter pour continuer.');
       }
 
       console.log('📋 Récupération des notes récentes');
@@ -99,14 +99,14 @@ class NotesApiService {
       console.error('❌ Erreur lors de la récupération des notes récentes:', error);
       
       if (error.message === 'TOKEN_EXPIRED') {
-        throw new Error('Session expirée. Veuillez vous reconnecter.');
+            throw new Error('Votre session a expiré. Veuillez vous reconnecter pour continuer.');
       }
       
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string; message?: string }>;
         
         if (axiosError.response?.status === 401) {
-          throw new Error('Non authentifié. Veuillez vous reconnecter.');
+          throw new Error('Votre session a expiré. Veuillez vous reconnecter.');
         }
         
         // Gérer les erreurs réseau

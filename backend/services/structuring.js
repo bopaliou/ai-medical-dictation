@@ -8,126 +8,158 @@ const { GoogleGenAI } = require('@google/genai');
 // Initialisation du client Gemini (le SDK récupère automatiquement GEMINI_API_KEY depuis les variables d'environnement)
 const ai = new GoogleGenAI({});
 
-// Prompt système strict pour la structuration SOAPIE
-const SOAPIE_SYSTEM_PROMPT = `Tu es un assistant médical spécialisé dans la structuration stricte de notes infirmières au format SOAPIE. 
+// Prompt système premium pour la structuration SOAPIE KadduCare
+const SOAPIE_SYSTEM_PROMPT = `Tu es un modèle spécialisé en structuration de données cliniques pour les professionnels de santé. 
 
-Tu TRAVAILLES AVEC DES PROFESSIONNELS DE SANTÉ, et ta priorité absolue est la FIABILITÉ.
+Tu dois transformer une transcription vocale infirmière en un rapport strictement conforme au format SOAPIE. 
+
+Ta sortie doit être rigoureusement exacte, cohérente, sans aucune hallucination, sans aucune invention de données, 
+sans mélange de langues, et parfaitement adaptée au contexte médical francophone d'Afrique de l'Ouest (Sénégal).
 
 RÈGLES INDISCUTABLES :
 
--------------------------------------------------------------
+1. EXACTITUDE & NON-HALLUCINATION
 
-1. ❌ Tu NE DOIS JAMAIS inventer, déduire, compléter, deviner ou corriger une information non dite. 
+   - Tu NE dois JAMAIS inventer un signe vital, une valeur, un symptôme ou une information non prononcée explicitement.
 
-2. ❌ Tu NE DOIS PAS ajouter de médicaments, d'âges, de chambres, de diagnostics, de traitements ou de valeurs vitales non mentionnées.
+   - Si une donnée n'est pas présente dans l'audio → retourne "non renseigné".
 
-3. ❌ Tu NE TRADUIS PAS la transcription en anglais. Aucun mot anglais n'est autorisé.
+   - Tu ne dois jamais interpréter ou extrapoler au-delà de ce qui est dit.
 
-4. ❌ Tu NE PEUX PAS reformuler en ajoutant du sens. Tu peux seulement nettoyer les phrases.
+   - Aucune terminologie anglaise n'est autorisée.
 
-5. ❌ Tu NE DOIS PAS modifier les chiffres, valeurs, doses ou signes vitaux.
+2. FORMAT STRICT SOAPIE
 
-6. ❌ Tu NE DOIS PAS interpréter médicalement. Juste structurer.
+   Tu dois générer 6 sections obligatoires :
 
-7. ✔ Tu corriges uniquement les fautes mineures :
+   - S : Subjectif
 
-   - orthographe
+   - O : Objectif (signes vitaux + examen physique)
 
-   - accords simples
+   - A : Analyse
 
-   - reconnaissance vocale erronée évidente ("respiration nouvelle 2" → "respiration 22" si cela correspond exactement aux mots prononcés)
+   - P : Plan de soins
 
-8. ✔ Si une information est incomplète ou partiellement incompréhensible :
+   - I : Interventions
 
-      → tu la mets telle quelle, sans la compléter.
+   - E : Évaluation
 
-9. ✔ Si un champ manque totalement :
+   Si une section n'a pas d'information → retourne : "Aucune donnée fournie dans la transcription."
 
-      → laisse une chaîne vide "".
+3. RESPECT DES UNITÉS MÉDICALES
 
-10. ✔ Tu renvoies TOUJOURS un JSON valide. Jamais autre chose.
+   - Température → degrés °C
 
--------------------------------------------------------------
+   - Tension artérielle → format systolique/diastolique mmHg (ex : 120/80 mmHg)
 
-FORMAT DE SORTIE (OBLIGATOIRE) :
+   - FC → bpm
 
-{
-  "patient": {
-    "full_name": "",
-    "age": "",
-    "gender": "",
-    "room_number": "",
-    "unit": ""
-  },
-  "soapie": {
-    "S": "",
-    "O": {
-      "vitals": {
-        "temperature": "",
-        "blood_pressure": "",
-        "heart_rate": "",
-        "respiratory_rate": "",
-        "spo2": "",
-        "glycemia": ""
-      },
-      "exam": "",
-      "labs": "",
-      "medications": []
-    },
-    "A": "",
-    "I": [],
-    "E": "",
-    "P": ""
-  }
-}
+   - FR → cycles/min
 
--------------------------------------------------------------
+   - SpO2 → %
 
-INSTRUCTIONS DE STRUCTURATION :
+   - Glycémie → g/L ou mmol/L selon indication
 
-1. Dans "S", mets EXACTEMENT ce que l'infirmière dit concernant :
+   - Toute unité absente → NE PAS EN INVENTER
 
-   - symptômes rapportés
+4. STYLE D'ÉCRITURE
 
-   - douleur ressentie
+   - Français strict, vocabulaire infirmier professionnel.
 
-   - contexte
+   - Ton précis, clair, concis, sans subjectivité.
 
-   - paroles du patient ou de la famille  
+   - Éviter le style littéraire et les longues phrases inutiles.
 
-   (ne jamais ajouter d'interprétation.)
+   - Aucune traduction approximative ; respecter les termes médicaux corrects.
 
-2. Dans "O" :
+5. CONTEXTE SÉNÉGALAIS
 
-   - Extraire fidèlement les signes vitaux, sans changer les chiffres.
+   - Garde les formulations naturelles pour un environnement hospitalier sénégalais.
 
-   - L'examen physique doit être un résumé direct du texte entendu.
+   - Exemple : "boxe 4", "service des urgences", "pavillon B", "consultation externe".
 
-   - Ne jamais transformer un détail sensoriel en conclusion médicale.
+6. STRUCTURE DE SORTIE (FORMAT JSON STRICT)
 
-   - Si un examen est ambigu : mets-le tel quel.
+   La réponse DOIT être un JSON valide contenant uniquement :
 
-3. Dans "A" :
+   {
+     "patient": {
+       "full_name": "",
+       "age": "",
+       "gender": "",
+       "room_number": "",
+       "unit": ""
+     },
+     "soapie": {
+       "S": "",
+       "O": {
+         "vitals": {
+           "temperature": "",
+           "blood_pressure": "",
+           "heart_rate": "",
+           "respiratory_rate": "",
+           "spo2": "",
+           "glycemia": ""
+         },
+         "exam": "",
+         "labs": "",
+         "medications": []
+       },
+       "A": "",
+       "I": [],
+       "E": "",
+       "P": ""
+     }
+   }
 
-   - Reprendre uniquement l'analyse clinique que l'infirmière a ÉNONCÉE.
+   - Aucune autre clé n'est autorisée.
 
-   - Si rien n'a été dit → mets "".
+   - Aucune ligne hors JSON.
 
-4. Dans "I" :
+   - Pas d'explication, pas de commentaire.
 
-   - Lister uniquement les interventions effectivement prononcées.
+7. CORRECTION AUTOMATIQUE DE LA TRANSCRIPTION
 
-5. Dans "E" :
+   Tu dois corriger automatiquement :
 
-   - Décrire seulement la réponse du patient mentionnée.
+   - fautes grammaticales
 
-6. Dans "P" :
+   - phrases incomplètes
 
-   - Mettre seulement les instructions réellement dites.
+   - redondances
 
-7. Les unités (°C, bpm, cmHg, %, g/L) doivent être conservées SANS AJOUT.
+   - transcription bruitée
 
--------------------------------------------------------------
+   - termes médicaux mal prononcés (ex : "tensio" → "tension artérielle", "spo" → "SpO2")
+
+   MAIS sans inventer !
+
+8. LOGIQUE MÉDICALE
+
+   - Vérifie la cohérence des valeurs (ex : 300 bpm = incohérent → mettre "valeur incohérente dans l'audio" ou "non renseigné").
+
+   - Si l'interprétation médicale (Analyse) n'est pas mentionnée → ne pas analyser, mettre : "Aucune donnée fournie dans la transcription."
+
+9. CHAMPS MULTILIGNES
+
+   - Les champs doivent utiliser des phrases complètes et médicalement cohérentes.
+
+   - Les listes (plan de soins, interventions) doivent être des tableaux JSON.
+
+10. NE JAMAIS AJOUTER :
+
+   - Pas de conseils médicaux.
+
+   - Pas de diagnostic médical non mentionné.
+
+   - Pas d'abréviations non standards.
+
+   - Pas d'adresse, pas d'inférence, pas de suppositions.
+
+OBJECTIF FINAL :
+
+Produire une structuration premium, fiable, sécurisée, conforme aux normes médicales 
+et parfaitement adaptée à la génération du PDF KadduCare.
 
 EXTRACTION DES INFORMATIONS PATIENT :
 
@@ -150,71 +182,7 @@ EXTRACTION DES INFORMATIONS PATIENT :
 - **unit** : Extrais l'unité ou le service si mentionné (ex: "cardiologie", "urgences", "service de médecine").
   Si l'unité n'est pas mentionnée → mets "".
 
--------------------------------------------------------------
-
-CONTRES MESURES CONTRE HALLUCINATIONS :
-
-À chaque fois que tu es tenté de compléter un champ :
-
-→ laisse-le vide.
-
-À chaque fois que la transcription est floue :
-
-→ reproduis EXACTEMENT les mots entendus, sans tenter de deviner.
-
-Si tu détectes un mot anglais (ex : "weak", "headache") :
-
-→ remplace par la version française correspondante SEULEMENT si c'est évident que c'est une erreur de transcription.
-
-Sinon → laisse "".
-
-Tu ne dois jamais :
-
-- inventer un service
-
-- inventer un âge
-
-- inventer un nom
-
-- inventer un diagnostic
-
-- inventer un médicament
-
-- déduire le sexe si ce n'est pas clairement dit
-
-- compléter une valeur vitale manquante
-
-- ajouter d'interprétation clinique
-
-- créer des données qui n'existent pas dans la transcription
-
-- extrapoler ou inférer des informations non mentionnées
-
-- utiliser des valeurs par défaut ou des exemples
-
-- remplir un champ avec "non spécifié" ou "non mentionné" si ce n'est pas dit explicitement
-
-- générer des listes de médicaments si aucun médicament n'est mentionné
-
-- créer des valeurs de signes vitaux si elles ne sont pas mentionnées
-
--------------------------------------------------------------
-
-RÈGLE D'OR : Si tu n'es pas ABSOLUMENT CERTAIN qu'une information est mentionnée dans la transcription, laisse le champ VIDE ("").
-
-Mieux vaut un champ vide qu'un champ rempli avec des données inventées.
-
--------------------------------------------------------------
-
-Ta réponse doit contenir UNIQUEMENT le JSON final.
-
-Aucun commentaire.
-
-Aucune explication.
-
-Aucun texte autour.
-
-Uniquement le JSON propre.`;
+Commence la structuration dès réception du texte brut de transcription.`;
 
 /**
  * Structure une transcription en format SOAPIE strict
@@ -364,28 +332,114 @@ async function structureSOAPIE(transcriptionText) {
       console.log(`📝 ... (${rawText.length - 4000} caractères supplémentaires)`);
     }
 
-    // EXTRACTION STRICTE DU JSON
+    // EXTRACTION ROBUSTE DU JSON
     // Même avec responseMimeType: 'application/json', on extrait strictement le JSON pour éviter les prompts
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('❌ Aucun JSON trouvé dans la réponse');
-      console.error('Raw model output complet:', rawText);
+    let jsonText = null;
+    let structuredData = null;
+    
+    // Méthode 1: Essayer de parser directement (si responseMimeType fonctionne)
+    try {
+      structuredData = JSON.parse(rawText);
+      console.log('✅ JSON parsé directement depuis rawText');
+      jsonText = rawText;
+    } catch (directParseError) {
+      // Méthode 2: Extraire le JSON avec regex (chercher le plus grand objet JSON)
+      const jsonMatches = [];
+      let braceCount = 0;
+      let startIndex = -1;
       
-      // Créer une erreur avec le raw output pour faciliter le diagnostic
-      const error = new Error('Aucun JSON structuré trouvé dans la réponse Gemini.');
-      error.rawSnippet = rawSnippet.substring(0, 1000);
-      throw error;
+      for (let i = 0; i < rawText.length; i++) {
+        if (rawText[i] === '{') {
+          if (braceCount === 0) startIndex = i;
+          braceCount++;
+        } else if (rawText[i] === '}') {
+          braceCount--;
+          if (braceCount === 0 && startIndex !== -1) {
+            jsonMatches.push(rawText.substring(startIndex, i + 1));
+            startIndex = -1;
+          }
+        }
+      }
+      
+      // Prendre le plus grand match (probablement le JSON principal)
+      if (jsonMatches.length > 0) {
+        jsonMatches.sort((a, b) => b.length - a.length);
+        jsonText = jsonMatches[0];
+        console.log(`📝 ${jsonMatches.length} objet(s) JSON trouvé(s), utilisation du plus grand (${jsonText.length} caractères)`);
+      }
+      
+      // Méthode 3: Fallback sur regex simple
+      if (!jsonText) {
+        const simpleMatch = rawText.match(/\{[\s\S]*\}/);
+        if (simpleMatch) {
+          jsonText = simpleMatch[0];
+          console.log('📝 JSON extrait avec regex simple');
+        }
+      }
+      
+      // Si toujours rien, essayer de nettoyer le texte
+      if (!jsonText) {
+        // Enlever les markdown code blocks si présents
+        const cleaned = rawText
+          .replace(/```json\s*/gi, '')
+          .replace(/```\s*/g, '')
+          .replace(/^[^{]*/, '') // Enlever tout avant le premier {
+          .replace(/[^}]*$/, ''); // Enlever tout après le dernier }
+        
+        if (cleaned.trim().startsWith('{') && cleaned.trim().endsWith('}')) {
+          jsonText = cleaned.trim();
+          console.log('📝 JSON nettoyé depuis markdown/code blocks');
+        }
+      }
+      
+      if (!jsonText) {
+        console.error('❌ Aucun JSON trouvé dans la réponse');
+        console.error('Raw model output complet (premiers 2000 caractères):', rawText.substring(0, 2000));
+        
+        // Créer une erreur avec le raw output pour faciliter le diagnostic
+        const error = new Error('Aucun JSON structuré trouvé dans la réponse Gemini.');
+        error.rawSnippet = rawSnippet.substring(0, 1000);
+        throw error;
+      }
+      
+      // Parse du JSON extrait
+      try {
+        structuredData = JSON.parse(jsonText);
+        console.log('✅ JSON parsé avec succès après extraction');
+      } catch (parseError) {
+        console.error('❌ Erreur lors du parsing JSON:', parseError.message);
+        console.error('Position de l\'erreur:', parseError.message.match(/position (\d+)/)?.[1] || 'inconnue');
+        console.error('JSON extrait (premiers 1000 caractères):', jsonText.substring(0, 1000));
+        console.error('JSON extrait (derniers 500 caractères):', jsonText.substring(Math.max(0, jsonText.length - 500)));
+        
+        // Essayer de réparer le JSON si possible (fermer les accolades manquantes)
+        try {
+          let repairedJson = jsonText;
+          let openBraces = (jsonText.match(/\{/g) || []).length;
+          let closeBraces = (jsonText.match(/\}/g) || []).length;
+          
+          if (openBraces > closeBraces) {
+            repairedJson = jsonText + '}'.repeat(openBraces - closeBraces);
+            console.log('🔧 Tentative de réparation: ajout de', openBraces - closeBraces, 'accolades fermantes');
+            structuredData = JSON.parse(repairedJson);
+            console.log('✅ JSON réparé et parsé avec succès');
+          } else {
+            throw parseError;
+          }
+        } catch (repairError) {
+          const error = new Error(`Erreur lors du parsing JSON: ${parseError.message}`);
+          error.rawSnippet = jsonText.substring(0, 1000);
+          error.parseError = parseError.message;
+          throw error;
+        }
+      }
     }
 
-    // Parse du JSON extrait
-    let structuredData;
-    try {
-      structuredData = JSON.parse(jsonMatch[0]);
-      console.log('✅ JSON parsé avec succès');
-    } catch (parseError) {
-      console.error('❌ Erreur lors du parsing JSON:', parseError.message);
-      console.error('JSON extrait (premiers 1000 caractères):', jsonMatch[0].substring(0, 1000));
-      throw new Error(`Erreur lors du parsing JSON: ${parseError.message}. JSON extrait: ${jsonMatch[0].substring(0, 500)}`);
+    // Vérifier que structuredData a été parsé avec succès
+    if (!structuredData) {
+      const error = new Error('Impossible de parser le JSON de la réponse Gemini.');
+      error.rawSnippet = rawSnippet.substring(0, 1000);
+      throw error;
     }
 
     // Validation de la structure - initialiser avec des valeurs vides si manquantes
@@ -424,6 +478,81 @@ async function structureSOAPIE(transcriptionText) {
       };
     }
 
+    // Normaliser les sections SOAPIE pour s'assurer qu'elles sont du bon type
+    // S, A, E, P doivent être des chaînes (string)
+    // I doit être un tableau (array)
+    if (structuredData.soapie.S !== undefined && typeof structuredData.soapie.S !== 'string') {
+      console.warn('⚠️ structuredData.soapie.S n\'est pas une chaîne, conversion en chaîne');
+      structuredData.soapie.S = Array.isArray(structuredData.soapie.S) 
+        ? structuredData.soapie.S.join(' ') 
+        : String(structuredData.soapie.S || '');
+    }
+    
+    if (structuredData.soapie.A !== undefined && typeof structuredData.soapie.A !== 'string') {
+      console.warn('⚠️ structuredData.soapie.A n\'est pas une chaîne, conversion en chaîne');
+      structuredData.soapie.A = Array.isArray(structuredData.soapie.A) 
+        ? structuredData.soapie.A.join(' ') 
+        : String(structuredData.soapie.A || '');
+    }
+    
+    if (structuredData.soapie.E !== undefined && typeof structuredData.soapie.E !== 'string') {
+      console.warn('⚠️ structuredData.soapie.E n\'est pas une chaîne, conversion en chaîne');
+      structuredData.soapie.E = Array.isArray(structuredData.soapie.E) 
+        ? structuredData.soapie.E.join(' ') 
+        : String(structuredData.soapie.E || '');
+    }
+    
+    if (structuredData.soapie.P !== undefined && typeof structuredData.soapie.P !== 'string') {
+      console.warn('⚠️ structuredData.soapie.P n\'est pas une chaîne, conversion en chaîne');
+      structuredData.soapie.P = Array.isArray(structuredData.soapie.P) 
+        ? structuredData.soapie.P.join(' ') 
+        : String(structuredData.soapie.P || '');
+    }
+    
+    // I doit être un tableau
+    if (structuredData.soapie.I !== undefined && !Array.isArray(structuredData.soapie.I)) {
+      console.warn('⚠️ structuredData.soapie.I n\'est pas un tableau, conversion en tableau');
+      if (typeof structuredData.soapie.I === 'string' && structuredData.soapie.I.trim() !== '') {
+        structuredData.soapie.I = [structuredData.soapie.I];
+      } else {
+        structuredData.soapie.I = [];
+      }
+    }
+    
+    // Normaliser O.vitals pour s'assurer que toutes les valeurs sont des chaînes
+    if (structuredData.soapie.O && structuredData.soapie.O.vitals) {
+      const vitals = structuredData.soapie.O.vitals;
+      Object.keys(vitals).forEach(key => {
+        if (vitals[key] !== undefined && typeof vitals[key] !== 'string') {
+          vitals[key] = String(vitals[key] || '');
+        }
+      });
+    }
+    
+    // Normaliser O.exam et O.labs
+    if (structuredData.soapie.O) {
+      if (structuredData.soapie.O.exam !== undefined && typeof structuredData.soapie.O.exam !== 'string') {
+        structuredData.soapie.O.exam = Array.isArray(structuredData.soapie.O.exam) 
+          ? structuredData.soapie.O.exam.join(' ') 
+          : String(structuredData.soapie.O.exam || '');
+      }
+      
+      if (structuredData.soapie.O.labs !== undefined && typeof structuredData.soapie.O.labs !== 'string') {
+        structuredData.soapie.O.labs = Array.isArray(structuredData.soapie.O.labs) 
+          ? structuredData.soapie.O.labs.join(' ') 
+          : String(structuredData.soapie.O.labs || '');
+      }
+      
+      // medications doit être un tableau
+      if (structuredData.soapie.O.medications !== undefined && !Array.isArray(structuredData.soapie.O.medications)) {
+        if (typeof structuredData.soapie.O.medications === 'string' && structuredData.soapie.O.medications.trim() !== '') {
+          structuredData.soapie.O.medications = [structuredData.soapie.O.medications];
+        } else {
+          structuredData.soapie.O.medications = [];
+        }
+      }
+    }
+
     console.log('✅ Structuration SOAPIE réussie');
     console.log('📋 Informations patient extraites:', {
       full_name: structuredData.patient?.full_name || '(vide)',
@@ -433,12 +562,12 @@ async function structureSOAPIE(transcriptionText) {
       unit: structuredData.patient?.unit || '(vide)'
     });
     console.log('📋 Sections SOAPIE présentes:', {
-      S: !!structuredData.soapie.S && structuredData.soapie.S.trim() !== '',
+      S: !!structuredData.soapie.S && typeof structuredData.soapie.S === 'string' && structuredData.soapie.S.trim() !== '',
       O: !!structuredData.soapie.O,
-      A: !!structuredData.soapie.A && structuredData.soapie.A.trim() !== '',
+      A: !!structuredData.soapie.A && typeof structuredData.soapie.A === 'string' && structuredData.soapie.A.trim() !== '',
       I: Array.isArray(structuredData.soapie.I) && structuredData.soapie.I.length > 0,
-      E: !!structuredData.soapie.E && structuredData.soapie.E.trim() !== '',
-      P: !!structuredData.soapie.P && structuredData.soapie.P.trim() !== ''
+      E: !!structuredData.soapie.E && typeof structuredData.soapie.E === 'string' && structuredData.soapie.E.trim() !== '',
+      P: !!structuredData.soapie.P && typeof structuredData.soapie.P === 'string' && structuredData.soapie.P.trim() !== ''
     });
 
     return structuredData;
@@ -530,8 +659,11 @@ function buildCleanNote(structuredData) {
   lines.push('S — Subjectif :');
   lines.push('');
   
-  if (soapie && soapie.S && soapie.S.trim() !== '') {
-    lines.push(soapie.S);
+  if (soapie && soapie.S) {
+    const sValue = typeof soapie.S === 'string' ? soapie.S : (Array.isArray(soapie.S) ? soapie.S.join(' ') : String(soapie.S || ''));
+    if (sValue.trim() !== '') {
+      lines.push(sValue);
+    }
   } else {
     // Fallback sur l'ancien format
     const patientReports = structuredData.patient_reports || '';
@@ -560,23 +692,42 @@ function buildCleanNote(structuredData) {
       const vitals = objective.vitals;
       const vitalsParts = [];
       
-      if (vitals.blood_pressure && vitals.blood_pressure.trim() !== '') {
-        vitalsParts.push(`BP ${vitals.blood_pressure}`);
+      // Normaliser et vérifier chaque signe vital
+      const normalizeVital = (value) => {
+        if (!value) return '';
+        if (typeof value === 'string') return value.trim();
+        if (typeof value === 'number') return String(value);
+        return String(value || '').trim();
+      };
+      
+      const bp = normalizeVital(vitals.blood_pressure);
+      if (bp !== '') {
+        vitalsParts.push(`BP ${bp}`);
       }
-      if (vitals.heart_rate && vitals.heart_rate.trim() !== '') {
-        vitalsParts.push(`HR ${vitals.heart_rate}`);
+      
+      const hr = normalizeVital(vitals.heart_rate);
+      if (hr !== '') {
+        vitalsParts.push(`HR ${hr}`);
       }
-      if (vitals.respiratory_rate && vitals.respiratory_rate.trim() !== '') {
-        vitalsParts.push(`RR ${vitals.respiratory_rate}`);
+      
+      const rr = normalizeVital(vitals.respiratory_rate);
+      if (rr !== '') {
+        vitalsParts.push(`RR ${rr}`);
       }
-      if (vitals.spo2 && vitals.spo2.trim() !== '') {
-        vitalsParts.push(`SpO₂ ${vitals.spo2}%`);
+      
+      const spo2 = normalizeVital(vitals.spo2);
+      if (spo2 !== '') {
+        vitalsParts.push(`SpO₂ ${spo2}%`);
       }
-      if (vitals.temperature && vitals.temperature.trim() !== '') {
-        vitalsParts.push(`Temp ${vitals.temperature}°C`);
+      
+      const temp = normalizeVital(vitals.temperature);
+      if (temp !== '') {
+        vitalsParts.push(`Temp ${temp}°C`);
       }
-      if (vitals.glycemia && vitals.glycemia.trim() !== '') {
-        vitalsParts.push(`Glycémie ${vitals.glycemia}`);
+      
+      const glycemia = normalizeVital(vitals.glycemia);
+      if (glycemia !== '') {
+        vitalsParts.push(`Glycémie ${glycemia}`);
       }
       
       if (vitalsParts.length > 0) {
@@ -585,13 +736,19 @@ function buildCleanNote(structuredData) {
     }
     
     // Examen physique
-    if (objective.exam && objective.exam.trim() !== '') {
-      lines.push(`• Examen physique : ${objective.exam}`);
+    if (objective.exam) {
+      const examValue = typeof objective.exam === 'string' ? objective.exam : (Array.isArray(objective.exam) ? objective.exam.join(' ') : String(objective.exam || ''));
+      if (examValue.trim() !== '') {
+        lines.push(`• Examen physique : ${examValue}`);
+      }
     }
     
     // Laboratoires
-    if (objective.labs && objective.labs.trim() !== '') {
-      lines.push(`• Laboratoire/imagerie : ${objective.labs}`);
+    if (objective.labs) {
+      const labsValue = typeof objective.labs === 'string' ? objective.labs : (Array.isArray(objective.labs) ? objective.labs.join(' ') : String(objective.labs || ''));
+      if (labsValue.trim() !== '') {
+        lines.push(`• Laboratoire/imagerie : ${labsValue}`);
+      }
     }
     
     // Médicaments
@@ -670,8 +827,11 @@ function buildCleanNote(structuredData) {
   lines.push('A — Analyse :');
   lines.push('');
   
-  if (soapie && soapie.A && soapie.A.trim() !== '') {
-    lines.push(soapie.A);
+  if (soapie && soapie.A) {
+    const aValue = typeof soapie.A === 'string' ? soapie.A : (Array.isArray(soapie.A) ? soapie.A.join(' ') : String(soapie.A || ''));
+    if (aValue.trim() !== '') {
+      lines.push(aValue);
+    }
   } else {
     const nursingAnalysis = structuredData.nursing_analysis || structuredData.analyse || '';
     if (nursingAnalysis && nursingAnalysis.trim() !== '') {
@@ -719,8 +879,11 @@ function buildCleanNote(structuredData) {
   lines.push('E — Évaluation :');
   lines.push('');
   
-  if (soapie && soapie.E && soapie.E.trim() !== '') {
-    lines.push(soapie.E);
+  if (soapie && soapie.E) {
+    const eValue = typeof soapie.E === 'string' ? soapie.E : (Array.isArray(soapie.E) ? soapie.E.join(' ') : String(soapie.E || ''));
+    if (eValue.trim() !== '') {
+      lines.push(eValue);
+    }
   } else {
     const patientResponse = structuredData.patient_response || structuredData.reponse_patient || '';
     if (patientResponse && patientResponse.trim() !== '') {
@@ -739,8 +902,11 @@ function buildCleanNote(structuredData) {
   lines.push('P — Plan :');
   lines.push('');
   
-  if (soapie && soapie.P && soapie.P.trim() !== '') {
-    lines.push(soapie.P);
+  if (soapie && soapie.P) {
+    const pValue = typeof soapie.P === 'string' ? soapie.P : (Array.isArray(soapie.P) ? soapie.P.join(' ') : String(soapie.P || ''));
+    if (pValue.trim() !== '') {
+      lines.push(pValue);
+    }
   } else {
     const nextSteps = structuredData.next_steps || structuredData.prochaines_etapes || '';
     if (nextSteps && nextSteps.trim() !== '') {

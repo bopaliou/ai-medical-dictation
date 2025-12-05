@@ -18,7 +18,9 @@ const {
   insertNote,
   getPatientById,
   createPatient,
-  deleteTemporaryFile
+  deleteTemporaryFile,
+  getNotesByPatient,
+  updateNote
 } = require('../services/supabase');
 
 const router = express.Router();
@@ -267,6 +269,7 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
       console.log('📋 Données SOAPIE présentes:', hasSOAPIEData);
     } catch (structError) {
       console.error('❌ Erreur lors de la structuration SOAPIE:', structError);
+      console.error('Stack trace:', structError.stack);
       
       // Vérifier si c'est une erreur 503 (overloaded)
       const isOverloaded = structError.message?.includes('503') || 
@@ -275,7 +278,8 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
                           structError.status === 503;
       
       // Extraire le raw output si disponible dans l'erreur
-      const rawSnippet = structError.rawSnippet || structError.message?.substring(0, 500) || 'Non disponible';
+      const rawSnippet = structError.rawSnippet || structError.message?.substring(0, 1000) || 'Non disponible';
+      const parseError = structError.parseError || '';
       
       // Si c'est une erreur 503, retourner un structured_json minimal pour permettre la continuation
       if (isOverloaded) {
@@ -312,11 +316,17 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
         console.log('✅ Structured_json minimal créé pour permettre la continuation manuelle');
         // Continuer avec le structured_json minimal au lieu de retourner une erreur
       } else {
-        // Autre erreur, retourner une erreur 400
+        // Autre erreur, retourner une erreur 400 avec plus de détails
+        console.error('❌ Détails de l\'erreur de structuration:');
+        console.error('  - Message:', structError.message);
+        console.error('  - Parse Error:', parseError);
+        console.error('  - Raw Snippet (premiers 1000 caractères):', rawSnippet);
+        
         return res.status(400).json({
           error: 'STRUCTURATION_FAILED',
           message: 'Échec de la structuration SOAPIE. Le modèle n\'a pas retourné de JSON valide.',
           details: structError.message,
+          parseError: parseError,
           rawModelOutput: rawSnippet
         });
       }
@@ -365,37 +375,95 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
         });
       }
     } else {
-      // Si patient_id était fourni, mettre à jour les informations si elles sont meilleures
-      const extractedPatient = structuredJson.patient;
-      if (extractedPatient) {
-        // Note: room_number et unit ne sont pas dans le schéma de la table patients
-        // Ces informations seront disponibles dans structuredJson.patient pour le PDF
-        
-        // Le nouveau format retourne des chaînes vides si non mentionné
-        if (extractedPatient.full_name && extractedPatient.full_name.trim() !== '' && 
-            (!patient.full_name || patient.full_name === 'Patient non identifié')) {
-          patient.full_name = extractedPatient.full_name;
-        }
-        if (extractedPatient.gender && extractedPatient.gender.trim() !== '' && !patient.gender) {
-          patient.gender = extractedPatient.gender;
-        }
-        if (extractedPatient.age && extractedPatient.age.trim() !== '' && !patient.dob) {
-          const currentYear = new Date().getFullYear();
-          const age = parseInt(extractedPatient.age);
-          if (!isNaN(age) && age > 0 && age < 150) {
-            patient.dob = new Date(currentYear - age, 0, 1).toISOString().split('T')[0];
+      // Si patient_id était fourni, s'assurer que structuredJson.patient contient les données du patient existant
+      // PRIORITÉ ABSOLUE : Les données du patient existant doivent être dans structuredJson.patient pour le PDF
+      console.log('📋 Patient existant sélectionné, mise à jour de structuredJson.patient avec les données du patient...');
+      
+      // Calculer l'âge depuis la date de naissance si disponible
+      let patientAge = null;
+      if (patient.dob) {
+        try {
+          const birthDate = new Date(patient.dob);
+          const today = new Date();
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
           }
-        }
-        
-        // Stocker room_number et unit dans l'objet patient en mémoire pour le PDF
-        // (mais pas dans la base de données car ces colonnes n'existent pas)
-        if (extractedPatient.room_number && extractedPatient.room_number.trim() !== '') {
-          patient.room_number = extractedPatient.room_number;
-        }
-        if (extractedPatient.unit && extractedPatient.unit.trim() !== '') {
-          patient.unit = extractedPatient.unit;
+          patientAge = `${age} ans`;
+        } catch (e) {
+          console.warn('⚠️ Erreur lors du calcul de l\'âge:', e);
         }
       }
+      
+      // Mettre à jour structuredJson.patient avec les données du patient existant
+      // Les données extraites de l'audio complètent mais ne remplacent pas les données existantes
+      if (!structuredJson.patient) {
+        structuredJson.patient = {};
+      }
+      
+      // Remplir structuredJson.patient avec les données du patient existant
+      // (priorité aux données existantes, complétées par les données extraites si vides)
+      structuredJson.patient.full_name = patient.full_name || structuredJson.patient.full_name || '';
+      structuredJson.patient.age = patientAge || structuredJson.patient.age || '';
+      structuredJson.patient.gender = patient.gender || structuredJson.patient.gender || '';
+      
+      // room_number et unit peuvent venir de l'audio ou être vides
+      if (!structuredJson.patient.room_number) {
+        structuredJson.patient.room_number = '';
+      }
+      if (!structuredJson.patient.unit) {
+        structuredJson.patient.unit = '';
+      }
+      
+      // Si des données patient ont été fournies dans la requête, les utiliser pour compléter
+      if (patientData) {
+        if (patientData.room_number && patientData.room_number.trim()) {
+          structuredJson.patient.room_number = patientData.room_number;
+        }
+        if (patientData.unit && patientData.unit.trim()) {
+          structuredJson.patient.unit = patientData.unit;
+        }
+      }
+      
+      // Compléter avec les données extraites de l'audio si les champs sont vides
+      const extractedPatient = structuredJson.patient;
+      if (extractedPatient) {
+        if (!structuredJson.patient.full_name || structuredJson.patient.full_name.trim() === '') {
+          if (extractedPatient.full_name && extractedPatient.full_name.trim() !== '') {
+            structuredJson.patient.full_name = extractedPatient.full_name;
+          }
+        }
+        if (!structuredJson.patient.age || structuredJson.patient.age.trim() === '') {
+          if (extractedPatient.age && extractedPatient.age.trim() !== '') {
+            structuredJson.patient.age = extractedPatient.age;
+          }
+        }
+        if (!structuredJson.patient.gender || structuredJson.patient.gender.trim() === '') {
+          if (extractedPatient.gender && extractedPatient.gender.trim() !== '') {
+            structuredJson.patient.gender = extractedPatient.gender;
+          }
+        }
+        if (!structuredJson.patient.room_number || structuredJson.patient.room_number.trim() === '') {
+          if (extractedPatient.room_number && extractedPatient.room_number.trim() !== '') {
+            structuredJson.patient.room_number = extractedPatient.room_number;
+          }
+        }
+        if (!structuredJson.patient.unit || structuredJson.patient.unit.trim() === '') {
+          if (extractedPatient.unit && extractedPatient.unit.trim() !== '') {
+            structuredJson.patient.unit = extractedPatient.unit;
+          }
+        }
+      }
+      
+      console.log('✅ structuredJson.patient mis à jour avec les données du patient existant:', {
+        full_name: structuredJson.patient.full_name,
+        age: structuredJson.patient.age,
+        gender: structuredJson.patient.gender,
+        room_number: structuredJson.patient.room_number,
+        unit: structuredJson.patient.unit
+      });
+      
       patient_id_final = patient_id;
     }
 
@@ -450,9 +518,39 @@ router.post('/audio', authenticate, authorize(['nurse', 'admin']), upload.single
       transcription_length: noteData.transcription_text?.length || 0
     });
 
-    const note = await insertNote(noteData);
+    // Vérifier s'il existe déjà un rapport récent pour ce patient (moins de 24h)
+    let note;
+    let isUpdate = false;
     
-    console.log(`✅ Note insérée avec succès: ${note.id}`);
+    try {
+      const existingNotes = await getNotesByPatient(patient_id_final);
+      const recentNote = existingNotes.find(n => 
+        n.created_by === userId && 
+        new Date(n.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+      );
+      
+      if (recentNote) {
+        console.log(`📋 Rapport existant trouvé (${recentNote.id}), mise à jour...`);
+        isUpdate = true;
+        const updateData = {
+          recorded_at: recordedAt.toISOString(),
+          transcription_text: transcriptionText,
+          structured_json: structuredJson,
+          audio_url: audioUploadResult?.url || recentNote.audio_url
+          // Note: updated_at n'est pas inclus car la colonne n'existe peut-être pas
+        };
+        note = await updateNote(recentNote.id, updateData);
+        console.log(`✅ Rapport mis à jour: ${note.id}`);
+      } else {
+        note = await insertNote(noteData);
+        console.log(`✅ Note insérée avec succès: ${note.id}`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification/mise à jour:', error);
+      note = await insertNote(noteData);
+      console.log(`✅ Note insérée avec succès: ${note.id}`);
+    }
+    
     console.log(`   audio_url dans la note: ${note.audio_url || 'null'}`);
 
     // Nettoyage des fichiers temporaires

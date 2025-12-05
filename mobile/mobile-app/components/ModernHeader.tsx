@@ -24,6 +24,7 @@ interface ModernHeaderProps {
     onPress: () => void;
     disabled?: boolean;
     loading?: boolean;
+    color?: string; // Couleur personnalisée pour l'icône et le background
   };
   style?: ViewStyle;
 }
@@ -136,7 +137,7 @@ export default function ModernHeader({
                 {
                   backgroundColor: rightAction.disabled
                     ? theme.colors.backgroundSecondary
-                    : theme.colors.success,
+                    : (rightAction.color || theme.colors.success),
                 },
               ]}
             >

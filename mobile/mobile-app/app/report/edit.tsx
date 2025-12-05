@@ -463,6 +463,22 @@ export default function ReportEditScreen() {
           console.warn('⚠️ Aucun patient ID trouvé, le backend devra le récupérer depuis la note');
         }
 
+        // VALIDATION : S'assurer que structuredJson contient les dernières données
+        // Attendre un court délai pour garantir que le state est à jour
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Vérifier que structuredJson contient bien les données patient
+        if (!structuredJson || !structuredJson.patient) {
+          console.error('❌ structuredJson.patient manquant avant génération PDF');
+          Alert.alert(
+            'Erreur',
+            'Les données du patient sont manquantes. Veuillez réessayer.',
+            [{ text: 'OK' }]
+          );
+          setIsGenerating(false);
+          return;
+        }
+        
         // Régénérer le PDF avec les données éditées
         console.log('📄 Appel de generatePDF avec:', {
           note_id: finalNoteId,
@@ -472,14 +488,16 @@ export default function ReportEditScreen() {
           patient: structuredJson.patient ? {
             full_name: structuredJson.patient.full_name || '(vide)',
             age: structuredJson.patient.age || '(vide)',
-            gender: structuredJson.patient.gender || '(vide)'
+            gender: structuredJson.patient.gender || '(vide)',
+            room_number: structuredJson.patient.room_number || '(vide)',
+            unit: structuredJson.patient.unit || '(vide)'
           } : '(absent)'
         });
 
         const pdfResponse = await reportApiService.generatePDF({
           note_id: finalNoteId || undefined,
           patient_id: finalPatientId || undefined, // Utiliser undefined au lieu de '' pour que le backend récupère depuis la note
-          structured_json: structuredJson,
+          structured_json: structuredJson, // Données actuelles du formulaire
           transcription: uploadResponse.transcription || transcription,
         });
 
@@ -513,6 +531,22 @@ export default function ReportEditScreen() {
           final: finalPatientId || 'sera récupéré depuis la note'
         });
 
+        // VALIDATION : S'assurer que structuredJson contient les dernières données
+        // Attendre un court délai pour garantir que le state est à jour
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Vérifier que structuredJson contient bien les données patient
+        if (!structuredJson || !structuredJson.patient) {
+          console.error('❌ structuredJson.patient manquant avant génération PDF');
+          Alert.alert(
+            'Erreur',
+            'Les données du patient sont manquantes. Veuillez réessayer.',
+            [{ text: 'OK' }]
+          );
+          setIsGenerating(false);
+          return;
+        }
+        
         console.log('📄 Appel de generatePDF (sans upload) avec:', {
           note_id: noteId,
           patient_id: finalPatientId,
@@ -521,14 +555,16 @@ export default function ReportEditScreen() {
           patient: structuredJson.patient ? {
             full_name: structuredJson.patient.full_name || '(vide)',
             age: structuredJson.patient.age || '(vide)',
-            gender: structuredJson.patient.gender || '(vide)'
+            gender: structuredJson.patient.gender || '(vide)',
+            room_number: structuredJson.patient.room_number || '(vide)',
+            unit: structuredJson.patient.unit || '(vide)'
           } : '(absent)'
         });
 
         const pdfResponse = await reportApiService.generatePDF({
           note_id: noteId || undefined,
           patient_id: finalPatientId, // undefined si vide, le backend récupérera depuis la note
-          structured_json: structuredJson,
+          structured_json: structuredJson, // Données actuelles du formulaire
           transcription: transcription,
         });
 

@@ -10,6 +10,7 @@ const {
   getPatientById,
   createPatient,
   updatePatient,
+  deletePatient,
   getAllPatients,
   getNotesByPatient,
   searchPatients
@@ -116,10 +117,9 @@ router.get('/:id', authenticate, authorize(['nurse', 'admin', 'auditor']), async
     const { id } = req.params;
 
     // Récupération du patient
-    let patient;
-    try {
-      patient = await getPatientById(id);
-    } catch (error) {
+    const patient = await getPatientById(id);
+    
+    if (!patient) {
       return res.status(404).json({ error: 'Patient non trouvé' });
     }
 
@@ -371,10 +371,9 @@ router.patch('/:id', authenticate, authorize(['nurse', 'admin']), async (req, re
     const { full_name, gender, dob, age, room_number, unit } = req.body;
 
     // Vérifier que le patient existe
-    let existingPatient;
-    try {
-      existingPatient = await getPatientById(id);
-    } catch (error) {
+    const existingPatient = await getPatientById(id);
+    
+    if (!existingPatient) {
       return res.status(404).json({ error: 'Patient non trouvé' });
     }
 
@@ -421,6 +420,99 @@ router.patch('/:id', authenticate, authorize(['nurse', 'admin']), async (req, re
     
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour du patient', 
+      message: error.message || 'Une erreur inattendue est survenue'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/patients/{id}:
+ *   delete:
+ *     summary: Supprime un patient et toutes ses notes associées
+ *     tags: [Patients]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID du patient à supprimer
+ *     responses:
+ *       200:
+ *         description: Patient supprimé avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Patient supprimé avec succès
+ *       404:
+ *         description: Patient non trouvé
+ *       401:
+ *         description: Non authentifié
+ *       403:
+ *         description: Accès refusé
+ *       500:
+ *         description: Erreur serveur
+ */
+router.delete('/:id', authenticate, authorize(['nurse', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('🗑️ [DELETE] Route DELETE appelée pour patient ID:', id);
+    console.log('   URL complète:', req.originalUrl);
+    console.log('   Méthode:', req.method);
+    console.log('   Headers:', JSON.stringify(req.headers, null, 2));
+
+    if (!id) {
+      console.log('   ❌ ID manquant');
+      return res.status(400).json({ error: 'ID du patient requis' });
+    }
+
+    console.log('🗑️ Tentative de suppression du patient:', id);
+
+    // Vérifier que le patient existe
+    console.log('   🔍 Recherche du patient dans la base de données...');
+    const existingPatient = await getPatientById(id);
+    
+    if (!existingPatient) {
+      console.log('   ⚠️ Patient non trouvé dans la base de données:', id);
+      return res.status(404).json({ error: 'Patient non trouvé' });
+    }
+
+    console.log('   ✅ Patient trouvé:', existingPatient.full_name);
+    console.log('   📋 Détails:', JSON.stringify(existingPatient, null, 2));
+
+    // Supprimer le patient (les notes seront supprimées automatiquement via CASCADE)
+    console.log('   🗑️ Appel de deletePatient...');
+    await deletePatient(id);
+
+    console.log('✅ Patient supprimé avec succès:', id);
+    res.json({
+      ok: true,
+      message: 'Patient supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de la suppression du patient:');
+    console.error('   Message:', error.message);
+    console.error('   Stack:', error.stack);
+    console.error('   Type:', error.constructor.name);
+    
+    if (error.message === 'Patient non trouvé' || error.message?.includes('non trouvé')) {
+      return res.status(404).json({ error: 'Patient non trouvé' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Erreur lors de la suppression du patient', 
       message: error.message || 'Une erreur inattendue est survenue'
     });
   }

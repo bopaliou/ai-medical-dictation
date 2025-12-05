@@ -162,7 +162,13 @@ if (process.env.NODE_ENV !== 'production') {
   console.log('   GET    /api/reports - Liste des rapports');
   console.log('   POST   /api/report/generate - Génération PDF');
   console.log('   DELETE /api/reports/:id - Suppression rapport');
-  console.log('   PATCH  /api/reports/:id - Mise à jour statut\n');
+  console.log('   PATCH  /api/reports/:id - Mise à jour statut');
+  console.log('\n📋 Routes Patients enregistrées:');
+  console.log('   GET    /api/patients - Liste des patients');
+  console.log('   GET    /api/patients/:id - Détails d\'un patient');
+  console.log('   POST   /api/patients - Créer un patient');
+  console.log('   PATCH  /api/patients/:id - Mettre à jour un patient');
+  console.log('   DELETE /api/patients/:id - Supprimer un patient\n');
   
   // Test de la route GET /api/reports (sans authentification pour le test)
   console.log('🔍 Test de la route GET /api/reports...');
@@ -191,7 +197,7 @@ app.use((req, res) => {
           me: 'GET /api/auth/me (requiert authentification)'
         },
       upload: 'POST /api/upload/audio (requiert authentification)',
-      patients: 'GET /api/patients, GET /api/patients/:id, POST /api/patients, PATCH /api/patients/:id (requiert authentification)',
+      patients: 'GET /api/patients, GET /api/patients/:id, POST /api/patients, PATCH /api/patients/:id, DELETE /api/patients/:id (requiert authentification)',
       notes: 'GET /api/notes/:patient_id (requiert authentification)'
     }
   });

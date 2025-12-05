@@ -399,10 +399,14 @@ async function getPatientById(patientId) {
       .single();
 
     if (error) {
+      // Code PGRST116 signifie "aucun résultat trouvé" dans Supabase
+      if (error.code === 'PGRST116' || error.message?.includes('No rows')) {
+        return null; // Retourner null au lieu de lancer une erreur
+      }
       throw new Error(`Erreur lors de la récupération du patient: ${error.message}`);
     }
 
-    return data;
+    return data || null;
   } catch (error) {
     console.error('Erreur getPatientById:', error);
     throw error;
@@ -1169,6 +1173,45 @@ async function searchPatients(query, limit = 20) {
 }
 
 /**
+ * Supprime un patient et toutes ses notes associées (CASCADE)
+ * @param {string} patientId - ID du patient à supprimer
+ * @returns {Promise<void>}
+ */
+async function deletePatient(patientId) {
+  try {
+    console.log(`   🔍 [deletePatient] Vérification de l'existence du patient: ${patientId}`);
+    
+    // Vérifier que le patient existe d'abord
+    const existingPatient = await getPatientById(patientId);
+    if (!existingPatient) {
+      console.log(`   ❌ [deletePatient] Patient non trouvé: ${patientId}`);
+      throw new Error('Patient non trouvé');
+    }
+
+    console.log(`   ✅ [deletePatient] Patient trouvé: ${existingPatient.full_name}`);
+    console.log(`   🗑️ [deletePatient] Suppression du patient dans Supabase...`);
+
+    // Supprimer le patient (les notes seront supprimées automatiquement via CASCADE)
+    const { data, error } = await supabase
+      .from('patients')
+      .delete()
+      .eq('id', patientId)
+      .select();
+
+    if (error) {
+      console.error(`   ❌ [deletePatient] Erreur Supabase:`, error);
+      throw new Error(`Erreur lors de la suppression du patient: ${error.message}`);
+    }
+
+    console.log(`   ✅ [deletePatient] Réponse Supabase:`, data);
+    console.log(`✅ Patient ${patientId} supprimé avec succès (notes supprimées en cascade)`);
+  } catch (error) {
+    console.error('❌ Erreur deletePatient:', error);
+    throw error;
+  }
+}
+
+/**
  * Supprime un fichier temporaire
  * @param {string} filePath - Chemin du fichier à supprimer
  */
@@ -1202,6 +1245,7 @@ module.exports = {
   getPatientById,
   createPatient,
   updatePatient,
+  deletePatient,
   getAllPatients,
   searchPatients,
   deleteTemporaryFile,

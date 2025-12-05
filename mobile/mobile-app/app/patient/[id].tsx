@@ -152,6 +152,47 @@ export default function PatientDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  const handleDelete = () => {
+    if (!patient) return;
+
+    Alert.alert(
+      'Supprimer le patient',
+      `Êtes-vous sûr de vouloir supprimer ${patient.full_name} ?\n\nCette action supprimera également tous les rapports associés et est irréversible.`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsSaving(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              
+              await patientsApiService.deletePatient(patient.id);
+              
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Succès', 'Patient supprimé avec succès', [
+                {
+                  text: 'OK',
+                  onPress: () => router.back(),
+                },
+              ]);
+            } catch (error: any) {
+              console.error('Erreur lors de la suppression:', error);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Erreur', error.message || 'Impossible de supprimer le patient');
+            } finally {
+              setIsSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
@@ -207,7 +248,12 @@ export default function PatientDetailScreen() {
                 disabled: isSaving,
                 loading: isSaving,
               }
-            : undefined
+            : {
+                icon: 'trash-outline',
+                onPress: handleDelete,
+                disabled: isSaving,
+                color: theme.colors.error, // Rouge pour l'action de suppression
+              }
         }
       />
       

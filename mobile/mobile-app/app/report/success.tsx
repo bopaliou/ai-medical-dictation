@@ -1,6 +1,10 @@
 /**
  * Écran de Succès - Affichage premium après génération d'un rapport PDF
  * Design iOS-grade avec toutes les actions PDF disponibles
+ * 
+ * IMPORTANT : Cet écran récupère TOUJOURS les données à jour via l'API
+ * pour garantir que les informations affichées sont les plus récentes,
+ * même si le rapport a été modifié après sa création.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -12,7 +16,6 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -24,55 +27,73 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system/legacy';
 import { reportApiService, ReportDetails } from '@/services/reportApi';
-import { API_CONFIG } from '@/config/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SuccessScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // Paramètres reçus
+  // Paramètres reçus (uniquement pour pdfUrl et reportId)
   const pdfUrl = params.pdfUrl as string;
-  const reportId = params.report_id || params.noteId as string; // Support des deux noms
-  const patientName = params.patient_name as string;
-  const createdAt = params.created_at as string;
+  const reportId = params.report_id || params.noteId as string;
 
   // États
   const [isLoading, setIsLoading] = useState(false);
-  const [reportDetails, setReportDetails] = useState<ReportDetails | null>(null);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(true);
+  const [report, setReport] = useState<ReportDetails | null>(null);
+  const [isLoadingReport, setIsLoadingReport] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Animations
   const [scaleAnim] = useState(new Animated.Value(0));
   const [checkOpacity] = useState(new Animated.Value(0));
+  const [fadeAnim] = useState(new Animated.Value(0));
 
-  // Récupérer les détails du rapport pour afficher les informations patient complètes
+  /**
+   * Récupère les détails du rapport depuis l'API
+   * Cette fonction garantit que les données affichées sont toujours à jour
+   */
+  const fetchReportDetails = async () => {
+    if (!reportId) {
+      setLoadError('ID du rapport manquant');
+      setIsLoadingReport(false);
+      return;
+    }
+
+    try {
+      setIsLoadingReport(true);
+      setLoadError(null);
+
+      console.log('📋 Récupération des détails du rapport:', reportId);
+      const details = await reportApiService.getReportDetails(reportId);
+
+      setReport(details);
+      console.log('✅ Détails du rapport récupérés:', {
+        patient: details.patient?.full_name || '(vide)',
+        age: details.patient?.age || '(vide)',
+        gender: details.patient?.gender || '(vide)',
+        created_at: details.created_at
+      });
+
+      // Animation fade-in des données
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la récupération des détails:', error);
+      setLoadError(error.message || 'Impossible de charger les détails du rapport');
+    } finally {
+      setIsLoadingReport(false);
+    }
+  };
+
+  // Récupération initiale des données
   useEffect(() => {
-    const fetchReportDetails = async () => {
-      if (!reportId) {
-        setIsLoadingDetails(false);
-        return;
-      }
-
-      try {
-        console.log('📋 Récupération des détails du rapport pour afficher les infos patient:', reportId);
-        const details = await reportApiService.getReportDetails(reportId);
-        setReportDetails(details);
-        console.log('✅ Détails du rapport récupérés:', {
-          patient: details.patient?.full_name || '(vide)',
-          age: details.patient?.age || '(vide)',
-          gender: details.patient?.gender || '(vide)'
-        });
-      } catch (error: any) {
-        console.error('❌ Erreur lors de la récupération des détails:', error);
-        // Ne pas bloquer l'affichage si la récupération échoue
-      } finally {
-        setIsLoadingDetails(false);
-      }
-    };
-
     fetchReportDetails();
   }, [reportId]);
 
-  // Animation d'entrée
+  // Animation d'entrée de l'icône de succès
   useEffect(() => {
     Animated.parallel([
       Animated.spring(scaleAnim, {
@@ -90,7 +111,9 @@ export default function SuccessScreen() {
     ]).start();
   }, []);
 
-  // Formater la date
+  /**
+   * Formate une date en français
+   */
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Date non disponible';
     try {
@@ -140,15 +163,13 @@ export default function SuccessScreen() {
 
     try {
       setIsLoading(true);
-      
-      // Vérifier si le partage est disponible
+
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Information', 'Le partage n\'est pas disponible sur cet appareil');
         return;
       }
 
-      // Télécharger le PDF temporairement pour le partage
       const fileUri = FileSystem.documentDirectory + `report-${Date.now()}.pdf`;
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
@@ -180,21 +201,19 @@ export default function SuccessScreen() {
     try {
       setIsLoading(true);
 
-      // Vérifier si l'impression est disponible
       const isAvailable = await Print.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Information', 'L\'impression n\'est pas disponible sur cet appareil');
         return;
       }
 
-      // Télécharger le PDF temporairement pour l'impression
       const fileUri = FileSystem.documentDirectory + `report-print-${Date.now()}.pdf`;
       const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
 
       if (downloadResult.status === 200) {
         await Print.printAsync({
           uri: downloadResult.uri,
-          html: '', // Non utilisé pour les PDF
+          html: '',
         });
       } else {
         throw new Error('Échec du téléchargement du PDF');
@@ -282,10 +301,17 @@ export default function SuccessScreen() {
     router.replace('/(tabs)');
   };
 
+  /**
+   * Réessayer le chargement des données
+   */
+  const handleRetry = () => {
+    fetchReportDetails();
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="auto" />
-      
+
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#006CFF" />
@@ -317,55 +343,72 @@ export default function SuccessScreen() {
 
           {/* Carte d'information */}
           <View style={styles.infoCard}>
-            {isLoadingDetails ? (
+            {isLoadingReport ? (
+              // État de chargement
               <View style={styles.loadingInfo}>
                 <ActivityIndicator size="small" color="#006CFF" />
                 <Text style={styles.loadingInfoText}>Chargement des informations...</Text>
               </View>
-            ) : (
-              <>
+            ) : loadError ? (
+              // État d'erreur
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+                <Text style={styles.errorTitle}>Erreur de chargement</Text>
+                <Text style={styles.errorMessage}>{loadError}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={handleRetry}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="refresh-outline" size={20} color="#006CFF" />
+                  <Text style={styles.retryButtonText}>Réessayer</Text>
+                </TouchableOpacity>
+              </View>
+            ) : report ? (
+              // Données chargées avec succès (fade-in)
+              <Animated.View style={{ opacity: fadeAnim }}>
                 {/* Nom du patient */}
                 <View style={styles.infoRow}>
                   <Ionicons name="person-outline" size={20} color="#8E8E93" />
                   <Text style={styles.infoLabel}>Nom complet :</Text>
                   <Text style={styles.infoValue}>
-                    {reportDetails?.patient?.full_name || patientName || 'Non spécifié'}
+                    {report.patient?.full_name || 'Non spécifié'}
                   </Text>
                 </View>
 
                 {/* Âge */}
-                {reportDetails?.patient?.age && (
+                {report.patient?.age && (
                   <View style={styles.infoRow}>
                     <Ionicons name="time-outline" size={20} color="#8E8E93" />
                     <Text style={styles.infoLabel}>Âge :</Text>
-                    <Text style={styles.infoValue}>{reportDetails.patient.age}</Text>
+                    <Text style={styles.infoValue}>{report.patient.age}</Text>
                   </View>
                 )}
 
                 {/* Sexe */}
-                {reportDetails?.patient?.gender && (
+                {report.patient?.gender && (
                   <View style={styles.infoRow}>
                     <Ionicons name="person-circle-outline" size={20} color="#8E8E93" />
                     <Text style={styles.infoLabel}>Sexe :</Text>
-                    <Text style={styles.infoValue}>{reportDetails.patient.gender}</Text>
+                    <Text style={styles.infoValue}>{report.patient.gender}</Text>
                   </View>
                 )}
 
                 {/* Chambre */}
-                {reportDetails?.patient?.room_number && (
+                {report.patient?.room_number && (
                   <View style={styles.infoRow}>
                     <Ionicons name="bed-outline" size={20} color="#8E8E93" />
                     <Text style={styles.infoLabel}>Chambre :</Text>
-                    <Text style={styles.infoValue}>{reportDetails.patient.room_number}</Text>
+                    <Text style={styles.infoValue}>{report.patient.room_number}</Text>
                   </View>
                 )}
 
                 {/* Unité / Service */}
-                {reportDetails?.patient?.unit && (
+                {report.patient?.unit && (
                   <View style={styles.infoRow}>
                     <Ionicons name="business-outline" size={20} color="#8E8E93" />
                     <Text style={styles.infoLabel}>Unité / Service :</Text>
-                    <Text style={styles.infoValue}>{reportDetails.patient.unit}</Text>
+                    <Text style={styles.infoValue}>{report.patient.unit}</Text>
                   </View>
                 )}
 
@@ -374,7 +417,7 @@ export default function SuccessScreen() {
                   <Ionicons name="calendar-outline" size={20} color="#8E8E93" />
                   <Text style={styles.infoLabel}>Date :</Text>
                   <Text style={styles.infoValue}>
-                    {formatDate(reportDetails?.created_at || createdAt)}
+                    {formatDate(report.created_at)}
                   </Text>
                 </View>
 
@@ -384,78 +427,99 @@ export default function SuccessScreen() {
                   <Text style={styles.infoLabel}>Type :</Text>
                   <Text style={styles.infoValue}>SOAPIE</Text>
                 </View>
-              </>
-            )}
+
+                {/* Statut */}
+                <View style={styles.infoRow}>
+                  <Ionicons
+                    name={report.status === 'final' ? 'checkmark-circle-outline' : 'create-outline'}
+                    size={20}
+                    color="#8E8E93"
+                  />
+                  <Text style={styles.infoLabel}>Statut :</Text>
+                  <Text style={[
+                    styles.infoValue,
+                    report.status === 'final' && styles.statusFinal,
+                    report.status === 'draft' && styles.statusDraft
+                  ]}>
+                    {report.status === 'final' ? 'Finalisé' :
+                      report.status === 'draft' ? 'Brouillon' :
+                        'Corbeille'}
+                  </Text>
+                </View>
+              </Animated.View>
+            ) : null}
           </View>
         </View>
 
-        {/* Section Actions */}
-        <View style={styles.actionsSection}>
-          <Text style={styles.actionsTitle}>Actions</Text>
+        {/* Section Actions (affichée uniquement si les données sont chargées) */}
+        {!isLoadingReport && !loadError && report && (
+          <View style={styles.actionsSection}>
+            <Text style={styles.actionsTitle}>Actions</Text>
 
-          {/* Bouton primaire : Ouvrir PDF */}
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleOpenPDF}
-            activeOpacity={0.8}
-            disabled={isLoading || !pdfUrl}
-          >
-            <Ionicons name="document-outline" size={22} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>Ouvrir le PDF</Text>
-          </TouchableOpacity>
-
-          {/* Boutons secondaires */}
-          <View style={styles.secondaryButtonsContainer}>
-            {/* Imprimer */}
+            {/* Bouton primaire : Ouvrir PDF */}
             <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={handlePrintPDF}
-              activeOpacity={0.7}
+              style={styles.primaryButton}
+              onPress={handleOpenPDF}
+              activeOpacity={0.8}
               disabled={isLoading || !pdfUrl}
             >
-              <Ionicons name="print-outline" size={22} color="#006CFF" />
-              <Text style={styles.secondaryButtonText}>Imprimer</Text>
+              <Ionicons name="document-outline" size={22} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Ouvrir le PDF</Text>
             </TouchableOpacity>
 
-            {/* Partager */}
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={handleSharePDF}
-              activeOpacity={0.7}
-              disabled={isLoading || !pdfUrl}
-            >
-              <Ionicons name="share-outline" size={22} color="#006CFF" />
-              <Text style={styles.secondaryButtonText}>Partager</Text>
-            </TouchableOpacity>
+            {/* Boutons secondaires */}
+            <View style={styles.secondaryButtonsContainer}>
+              {/* Imprimer */}
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handlePrintPDF}
+                activeOpacity={0.7}
+                disabled={isLoading || !pdfUrl}
+              >
+                <Ionicons name="print-outline" size={22} color="#006CFF" />
+                <Text style={styles.secondaryButtonText}>Imprimer</Text>
+              </TouchableOpacity>
+
+              {/* Partager */}
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleSharePDF}
+                activeOpacity={0.7}
+                disabled={isLoading || !pdfUrl}
+              >
+                <Ionicons name="share-outline" size={22} color="#006CFF" />
+                <Text style={styles.secondaryButtonText}>Partager</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Actions de gestion */}
+            <View style={styles.managementButtonsContainer}>
+              {/* Mettre en brouillon */}
+              <TouchableOpacity
+                style={styles.managementButton}
+                onPress={handleSaveAsDraft}
+                activeOpacity={0.7}
+                disabled={isLoading || !reportId}
+              >
+                <Ionicons name="save-outline" size={20} color="#8E8E93" />
+                <Text style={styles.managementButtonText}>Mettre en brouillon</Text>
+              </TouchableOpacity>
+
+              {/* Supprimer */}
+              <TouchableOpacity
+                style={[styles.managementButton, styles.deleteButton]}
+                onPress={handleDeleteReport}
+                activeOpacity={0.7}
+                disabled={isLoading || !reportId}
+              >
+                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                <Text style={[styles.managementButtonText, styles.deleteButtonText]}>
+                  Mettre à la corbeille
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          {/* Actions de gestion */}
-          <View style={styles.managementButtonsContainer}>
-            {/* Mettre en brouillon */}
-            <TouchableOpacity
-              style={styles.managementButton}
-              onPress={handleSaveAsDraft}
-              activeOpacity={0.7}
-              disabled={isLoading || !reportId}
-            >
-              <Ionicons name="save-outline" size={20} color="#8E8E93" />
-              <Text style={styles.managementButtonText}>Mettre en brouillon</Text>
-            </TouchableOpacity>
-
-            {/* Supprimer */}
-            <TouchableOpacity
-              style={[styles.managementButton, styles.deleteButton]}
-              onPress={handleDeleteReport}
-              activeOpacity={0.7}
-              disabled={isLoading || !reportId}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-              <Text style={[styles.managementButtonText, styles.deleteButtonText]}>
-                Mettre à la corbeille
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
 
         {/* Bouton retour dashboard */}
         <TouchableOpacity
@@ -521,6 +585,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    minHeight: 200,
   },
   infoRow: {
     flexDirection: 'row',
@@ -539,6 +604,58 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     fontWeight: '600',
     flex: 1,
+  },
+  statusFinal: {
+    color: '#1BC47D',
+  },
+  statusDraft: {
+    color: '#FF9500',
+  },
+  loadingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingInfoText: {
+    fontSize: 15,
+    color: '#8E8E93',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 15,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#006CFF',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#006CFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   actionsSection: {
     marginBottom: 24,
@@ -634,16 +751,5 @@ const styles = StyleSheet.create({
     color: '#006CFF',
     fontSize: 16,
     fontWeight: '500',
-  },
-  loadingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    gap: 12,
-  },
-  loadingInfoText: {
-    fontSize: 15,
-    color: '#8E8E93',
   },
 });

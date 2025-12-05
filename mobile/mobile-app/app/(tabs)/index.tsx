@@ -815,12 +815,28 @@ export default function DashboardScreen() {
         // Ne pas mettre à jour allReports ici - cela sera fait dans loadStatistics
       }
     } catch (error: any) {
-      console.error('Erreur lors du chargement des rapports récents:', error);
-      setRecentReports([]);
-
-      // Afficher un message d'erreur clair si c'est une erreur réseau
-      if (error.message && error.message.includes('Impossible de se connecter')) {
-        setNetworkError(error.message);
+      // Afficher un message d'erreur clair selon le type d'erreur
+      if (error.message) {
+        if (error.message.includes('Trop de requêtes') || error.response?.status === 429) {
+          // Pour l'erreur 429, on ne log pas comme erreur mais comme info
+          // L'utilisateur peut continuer à utiliser l'app, les données seront rechargées automatiquement
+          console.log('ℹ️ Trop de requêtes - Les données seront rechargées automatiquement dans quelques instants');
+          // Ne pas mettre à jour recentReports à vide pour garder les données précédentes
+          // Ne pas afficher d'erreur réseau pour 429
+          return; // Sortir tôt pour ne pas vider les rapports
+        } else if (error.message.includes('Impossible de se connecter') || error.message.includes('Oups !')) {
+          console.error('Erreur réseau lors du chargement des rapports récents:', error);
+          setRecentReports([]);
+          setNetworkError(error.message);
+        } else {
+          // Autres erreurs
+          console.error('Erreur lors du chargement des rapports récents:', error);
+          setRecentReports([]);
+          setNetworkError(error.message);
+        }
+      } else {
+        console.error('Erreur lors du chargement des rapports récents:', error);
+        setRecentReports([]);
       }
     } finally {
       setIsLoadingNotes(false);
@@ -862,14 +878,28 @@ export default function DashboardScreen() {
         setAllReports([]);
       }
     } catch (error: any) {
-      console.error('❌ Erreur lors du chargement des statistiques:', error);
-      setTotalPatients(0);
-      setAllReports([]); // S'assurer que allReports est un tableau vide en cas d'erreur
-
-      // Afficher un message d'erreur clair si c'est une erreur réseau
-      if (error.message && error.message.includes('Impossible de se connecter')) {
-        setNetworkError(error.message);
-        // Ne pas afficher d'alerte ici car elle sera déjà affichée par loadRecentReports
+      // Afficher un message d'erreur clair selon le type d'erreur
+      if (error.message) {
+        if (error.message.includes('Trop de requêtes') || error.response?.status === 429) {
+          // Pour l'erreur 429, on ne log pas comme erreur mais comme info
+          // On garde les données précédentes et on ne vide pas les statistiques
+          console.log('ℹ️ Trop de requêtes - Les statistiques seront rechargées automatiquement dans quelques instants');
+          // Ne pas vider les données pour garder l'affichage actuel
+          return; // Sortir tôt pour ne pas réinitialiser les données
+        } else if (error.message.includes('Impossible de se connecter') || error.message.includes('Oups !')) {
+          console.error('❌ Erreur réseau lors du chargement des statistiques:', error);
+          setTotalPatients(0);
+          setAllReports([]);
+          setNetworkError(error.message);
+        } else {
+          console.error('❌ Erreur lors du chargement des statistiques:', error);
+          setTotalPatients(0);
+          setAllReports([]);
+        }
+      } else {
+        console.error('❌ Erreur lors du chargement des statistiques:', error);
+        setTotalPatients(0);
+        setAllReports([]);
       }
     } finally {
       setIsLoadingStats(false);

@@ -26,6 +26,7 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system/legacy';
 import { reportApiService } from '@/services/reportApi';
+import axios from 'axios';
 
 export default function PDFPreviewScreen() {
   const router = useRouter();
@@ -197,41 +198,174 @@ export default function PDFPreviewScreen() {
       setIsActionLoading(true);
       console.log('🖨️ Impression du PDF:', pdfUrl);
 
+      // Vérifier que l'impression est disponible
       const isAvailable = await Print.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert('Information', 'L\'impression n\'est pas disponible sur cet appareil');
+        Alert.alert(
+          'Information', 
+          'L\'impression n\'est pas disponible sur cet appareil. Veuillez utiliser "Ouvrir dans le navigateur" pour imprimer depuis le navigateur.'
+        );
+        setIsActionLoading(false);
+        setShowActionsMenu(false);
         return;
+      }
+
+      // Vérifier que le répertoire de documents existe
+      const documentDir = FileSystem.documentDirectory;
+      if (!documentDir) {
+        throw new Error('Répertoire de documents non disponible');
+      }
+
+      // Utiliser l'URL actuelle ou régénérer si nécessaire
+      let finalPdfUrl = pdfUrl;
+      
+      // Si on a un reportId et que l'URL semble expirée, essayer de la régénérer
+      if (reportId && (pdfUrl.includes('expires=') || pdfUrl.includes('signature='))) {
+        try {
+          console.log('🔄 Vérification de l\'URL signée...');
+          const newSignedUrl = await reportApiService.regenerateSignedUrl(reportId);
+          finalPdfUrl = newSignedUrl;
+          setPdfUrl(newSignedUrl); // Mettre à jour l'URL pour les prochaines utilisations
+          console.log('✅ URL signée régénérée pour l\'impression');
+        } catch (regenerateError) {
+          console.warn('⚠️ Impossible de régénérer l\'URL, utilisation de l\'URL actuelle:', regenerateError);
+          // Continuer avec l'URL actuelle
+        }
       }
 
       // Télécharger le PDF temporairement pour l'impression
       const fileName = `rapport-print-${Date.now()}.pdf`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      const fileUri = `${documentDir}${fileName}`;
       
       console.log('📥 Téléchargement du PDF pour impression...');
-      const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+      console.log('   URL source:', finalPdfUrl);
+      console.log('   Destination:', fileUri);
+      
+      // Télécharger avec timeout et meilleure gestion d'erreur
+      // Méthode 1: Essayer FileSystem.downloadAsync (plus rapide pour les URLs publiques)
+      let downloadResult;
+      try {
+        const downloadPromise = FileSystem.downloadAsync(finalPdfUrl, fileUri);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout: Le téléchargement a pris trop de temps (>30s)')), 30000)
+        );
+        
+        downloadResult = await Promise.race([downloadPromise, timeoutPromise]) as Awaited<ReturnType<typeof FileSystem.downloadAsync>>;
+      } catch (downloadError: any) {
+        // Si FileSystem.downloadAsync échoue, essayer avec axios (pour les URLs nécessitant des headers)
+        console.warn('⚠️ FileSystem.downloadAsync a échoué, tentative avec axios:', downloadError.message);
+        
+        try {
+          // Télécharger avec axios (gère mieux les headers d'authentification)
+          const response = await axios.get(finalPdfUrl, {
+            responseType: 'arraybuffer',
+            timeout: 30000,
+            headers: {
+              'Accept': 'application/pdf',
+            },
+          });
+          
+          // Convertir ArrayBuffer en base64 (méthode compatible React Native)
+          const arrayBuffer = response.data;
+          const uint8Array = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < uint8Array.length; i++) {
+            binary += String.fromCharCode(uint8Array[i]);
+          }
+          const base64 = btoa(binary);
+          
+          // Écrire le fichier en base64
+          await FileSystem.writeAsStringAsync(fileUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          // Créer un objet downloadResult compatible
+          downloadResult = {
+            status: response.status,
+            uri: fileUri,
+            headers: response.headers as any,
+          };
+          
+          console.log('✅ PDF téléchargé avec axios');
+        } catch (axiosError: any) {
+          console.error('❌ Erreur axios:', axiosError);
+          // Si axios échoue aussi, relancer l'erreur originale
+          throw downloadError;
+        }
+      }
 
       console.log('📥 Résultat du téléchargement:', {
         status: downloadResult.status,
         uri: downloadResult.uri,
+        headers: downloadResult.headers,
       });
 
-      if (downloadResult.status === 200 && downloadResult.uri) {
-        console.log('🖨️ Impression du fichier:', downloadResult.uri);
-        await Print.printAsync({
-          uri: downloadResult.uri,
-        });
-        console.log('✅ Impression lancée');
-      } else {
+      // Vérifier que le téléchargement a réussi
+      if (downloadResult.status !== 200) {
         throw new Error(`Échec du téléchargement du PDF (status: ${downloadResult.status})`);
       }
+
+      if (!downloadResult.uri) {
+        throw new Error('URI du fichier téléchargé non disponible');
+      }
+
+      // Vérifier que le fichier existe et a une taille valide
+      const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
+      console.log('📄 Informations du fichier:', fileInfo);
+      
+      if (!fileInfo.exists) {
+        throw new Error('Le fichier téléchargé n\'existe pas');
+      }
+
+      if (fileInfo.size === 0) {
+        throw new Error('Le fichier téléchargé est vide');
+      }
+
+      console.log('🖨️ Impression du fichier:', downloadResult.uri);
+      console.log('   Taille du fichier:', fileInfo.size, 'bytes');
+      
+      // Lancer l'impression
+      const printResult = await Print.printAsync({
+        uri: downloadResult.uri,
+        html: undefined, // Utiliser uniquement l'URI, pas de HTML
+      });
+      
+      console.log('✅ Impression lancée:', printResult);
+      
+      // Nettoyer le fichier temporaire après impression (optionnel)
+      // On peut le laisser pour permettre une réimpression rapide
+      
     } catch (error: any) {
       console.error('❌ Erreur lors de l\'impression:', error);
-      Alert.alert(
-        'Erreur',
-        error.message?.includes('téléchargement')
-          ? 'Impossible de télécharger le PDF. Vérifiez votre connexion et les permissions de stockage.'
-          : 'Impossible d\'imprimer le PDF. Vérifiez votre connexion.'
-      );
+      console.error('   Stack:', error.stack);
+      
+      // Messages d'erreur plus précis
+      let errorMessage = 'Impossible d\'imprimer le PDF.';
+      
+      if (error.message?.includes('téléchargement') || error.message?.includes('download')) {
+        errorMessage = 'Impossible de télécharger le PDF. Vérifiez votre connexion internet et réessayez.';
+      } else if (error.message?.includes('connexion') || error.message?.includes('connection') || error.message?.includes('network')) {
+        errorMessage = 'Erreur de connexion. Vérifiez votre connexion internet et réessayez.';
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Le téléchargement a pris trop de temps. Vérifiez votre connexion et réessayez.';
+      } else if (error.message?.includes('404') || error.message?.includes('not found')) {
+        errorMessage = 'Le PDF n\'a pas été trouvé. Il a peut-être été supprimé ou l\'URL a expiré.';
+      } else if (error.message?.includes('401') || error.message?.includes('403') || error.message?.includes('unauthorized')) {
+        errorMessage = 'Vous n\'êtes pas autorisé à accéder à ce PDF. Veuillez vous reconnecter.';
+      } else if (error.message) {
+        errorMessage = `Erreur: ${error.message}`;
+      }
+      
+      Alert.alert('Erreur d\'impression', errorMessage, [
+        {
+          text: 'Réessayer',
+          onPress: () => handlePrintPDF(),
+        },
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+      ]);
     } finally {
       setIsActionLoading(false);
       setShowActionsMenu(false);

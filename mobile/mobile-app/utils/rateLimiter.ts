@@ -124,9 +124,27 @@ class RateLimiter {
         // Si c'est une erreur 429, attendre avant de réessayer
         if (error?.response?.status === 429 && attempt < maxRetries) {
           const delay = initialDelay * Math.pow(2, attempt); // Backoff exponentiel
-          console.log(`⏳ Erreur 429, nouvelle tentative dans ${delay}ms (tentative ${attempt + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          const retryAfter = error?.response?.headers?.['retry-after'];
+          const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
+          
+          console.log(`⏳ Trop de requêtes (429), nouvelle tentative dans ${Math.round(waitTime / 1000)}s (tentative ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
+        }
+        
+        // Si toutes les tentatives ont échoué avec une erreur 429, créer un message d'erreur plus clair
+        if (error?.response?.status === 429 && attempt >= maxRetries) {
+          const retryAfter = error?.response?.headers?.['retry-after'];
+          const waitTime = retryAfter ? parseInt(retryAfter, 10) : 30;
+          const friendlyError = new Error(
+            `Trop de requêtes ont été envoyées au serveur.\n\n` +
+            `Veuillez patienter ${waitTime} secondes avant de réessayer.\n\n` +
+            `💡 Astuce : L'application va automatiquement réessayer dans quelques instants.`
+          );
+          // Préserver les propriétés de l'erreur axios
+          (friendlyError as any).response = error.response;
+          (friendlyError as any).isAxiosError = true;
+          throw friendlyError;
         }
         
         // Pour les autres erreurs ou si on a épuisé les tentatives

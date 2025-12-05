@@ -94,7 +94,7 @@ class AuthApiService {
         return response.data;
       }
 
-      throw new Error('Réponse invalide du serveur');
+      throw new Error('Une réponse inattendue a été reçue du serveur. Veuillez réessayer.');
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<ApiError>;
@@ -103,14 +103,15 @@ class AuthApiService {
           // Afficher l'URL configurée pour faciliter le diagnostic
           const configUrl = this.baseURL;
           throw new Error(
-            `Impossible de se connecter au serveur.\n\n` +
-            `URL configurée: ${configUrl}\n\n` +
-            `Vérifiez que:\n` +
-            `• Le backend est démarré\n` +
-            `• L'IP dans app.json correspond à celle affichée par le backend\n` +
-            `• Votre appareil et l'ordinateur sont sur le même réseau WiFi\n` +
-            `• Le firewall autorise les connexions sur le port 3000\n\n` +
-            `Consultez DIAGNOSTIC_CONNEXION.md pour plus d'aide.`
+            `Oups ! Nous n'arrivons pas à nous connecter au serveur.\n\n` +
+            `Adresse configurée : ${configUrl}\n\n` +
+            `Voici quelques vérifications à faire :\n` +
+            `• Assurez-vous que le serveur est bien démarré sur votre ordinateur\n` +
+            `• Vérifiez que l'adresse IP dans app.json correspond à celle de votre ordinateur\n` +
+            `• Votre téléphone et votre ordinateur doivent être sur le même réseau WiFi\n` +
+            `• Le firewall doit autoriser les connexions sur le port 3000\n\n` +
+            `💡 Astuce : Vérifiez votre connexion WiFi et réessayez dans quelques instants.\n\n` +
+            `Pour plus d'aide, consultez DIAGNOSTIC_CONNEXION.md`
           );
         }
 
@@ -121,21 +122,21 @@ class AuthApiService {
         const cleanMessage = this.sanitizeErrorMessage(errorData?.message || errorData?.error || '');
 
         if (status === 401) {
-          throw new Error(cleanMessage || 'Email ou mot de passe incorrect');
+          throw new Error(cleanMessage || 'L\'email ou le mot de passe est incorrect. Veuillez vérifier vos identifiants.');
         }
 
         if (status === 400) {
-          throw new Error(cleanMessage || 'Données invalides');
+          throw new Error(cleanMessage || 'Les informations saisies ne sont pas valides. Veuillez vérifier et réessayer.');
         }
 
         if (status === 500) {
-          throw new Error(cleanMessage || 'Erreur serveur. Veuillez réessayer plus tard.');
+          throw new Error(cleanMessage || 'Une erreur s\'est produite côté serveur. Veuillez réessayer dans quelques instants.');
         }
 
-        throw new Error(cleanMessage || `Erreur ${status}`);
+        throw new Error(cleanMessage || `Une erreur s'est produite (code ${status}). Veuillez réessayer.`);
       }
 
-      throw error instanceof Error ? error : new Error('Une erreur inconnue est survenue');
+      throw error instanceof Error ? error : new Error('Une erreur inattendue s\'est produite. Veuillez réessayer.');
     }
   }
 

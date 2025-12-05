@@ -113,32 +113,58 @@ export default function ReportDetailsScreen() {
       setReport(reportDetails);
       console.log('✅ Détails du rapport récupérés avec succès');
     } catch (error: any) {
-      console.error('❌ Erreur lors de la récupération des détails:', error);
-      
-      if (error.message?.includes('Session expirée')) {
-        Alert.alert('Session expirée', error.message, [
-          { text: 'OK', onPress: () => router.replace('/login') }
-        ]);
-      } else if (error.message?.includes('non trouvé') || error.response?.status === 404) {
-        Alert.alert(
-          'Rapport non trouvé',
-          'Ce rapport n\'existe pas ou a été supprimé. La liste sera actualisée.',
-          [
-            { 
-              text: 'OK', 
-              onPress: () => {
-                // Retourner au dashboard et forcer le rechargement
-                router.replace('/(tabs)');
+      // Afficher un message d'erreur clair selon le type d'erreur
+      if (error.message) {
+        if (error.message.includes('Trop de requêtes') || error.response?.status === 429) {
+          // Pour l'erreur 429, on ne log pas comme erreur mais comme info
+          // L'application va réessayer automatiquement
+          console.log('ℹ️ Trop de requêtes - Les détails seront rechargés automatiquement dans quelques instants');
+          // Ne pas afficher d'alerte pour 429, juste réessayer automatiquement après un délai
+          setTimeout(() => {
+            fetchReportDetails();
+          }, 5000); // Réessayer après 5 secondes
+          return; // Sortir tôt pour ne pas afficher d'erreur
+        } else if (error.message.includes('Session expirée') || error.message.includes('Votre session a expiré')) {
+          console.error('❌ Session expirée lors de la récupération des détails');
+          Alert.alert('Session expirée', error.message, [
+            { text: 'OK', onPress: () => router.replace('/login') }
+          ]);
+        } else if (error.message.includes('non trouvé') || error.response?.status === 404) {
+          console.error('❌ Rapport non trouvé');
+          Alert.alert(
+            'Rapport non trouvé',
+            'Ce rapport n\'existe pas ou a été supprimé. La liste sera actualisée.',
+            [
+              { 
+                text: 'OK', 
+                onPress: () => {
+                  // Retourner au dashboard et forcer le rechargement
+                  router.replace('/(tabs)');
+                }
               }
-            }
-          ]
-        );
-      } else if (error.message?.includes('Accès refusé') || error.message?.includes('pas autorisé')) {
-        Alert.alert('Accès refusé', 'Vous n\'êtes pas autorisé à consulter ce rapport.', [
-          { text: 'OK', onPress: () => router.back() }
-        ]);
+            ]
+          );
+        } else if (error.message.includes('Accès refusé') || error.message?.includes('pas autorisé') || error.message?.includes('autorisation')) {
+          console.error('❌ Accès refusé');
+          Alert.alert('Accès refusé', 'Vous n\'êtes pas autorisé à consulter ce rapport.', [
+            { text: 'OK', onPress: () => router.back() }
+          ]);
+        } else if (error.message.includes('Impossible de se connecter') || error.message.includes('Oups !')) {
+          console.error('❌ Erreur réseau lors de la récupération des détails:', error);
+          Alert.alert('Erreur de connexion', error.message || 'Impossible de charger les détails du rapport.', [
+            { text: 'Réessayer', onPress: fetchReportDetails },
+            { text: 'Retour', style: 'cancel', onPress: () => router.back() }
+          ]);
+        } else {
+          console.error('❌ Erreur lors de la récupération des détails:', error);
+          Alert.alert('Erreur', error.message || 'Impossible de charger les détails du rapport.', [
+            { text: 'Réessayer', onPress: fetchReportDetails },
+            { text: 'Retour', style: 'cancel', onPress: () => router.back() }
+          ]);
+        }
       } else {
-        Alert.alert('Erreur', error.message || 'Impossible de charger les détails du rapport.', [
+        console.error('❌ Erreur inconnue lors de la récupération des détails:', error);
+        Alert.alert('Erreur', 'Une erreur inattendue s\'est produite. Veuillez réessayer.', [
           { text: 'Réessayer', onPress: fetchReportDetails },
           { text: 'Retour', style: 'cancel', onPress: () => router.back() }
         ]);
@@ -742,7 +768,7 @@ export default function ReportDetailsScreen() {
                         borderColor: theme.colors.border,
                       }]}>
                         <View style={[styles.medicationIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                          <Ionicons name="pill" size={16} color={theme.colors.primary} />
+                          <Ionicons name="medical" size={16} color={theme.colors.primary} />
                         </View>
                         <Text style={[styles.medicationText, { color: theme.colors.text }]}>{med}</Text>
                       </View>
