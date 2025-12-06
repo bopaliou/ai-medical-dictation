@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
     make \
+    cmake \
     g++ \
     curl \
     && rm -rf /var/lib/apt/lists/*
