@@ -40,13 +40,17 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-  "splash": {
-    "image": "./assets/images/splashscreen_logo.png",
-    "backgroundColor": "#E8F1FF",
-    "resizeMode": "contain"
-  },
+    "splash": {
+      "image": "./assets/images/splash-icon-v2.png",
+      "backgroundColor": "#E8F1FF",
+      "resizeMode": "contain"
+    },
     "extra": {
-    "API_BASE_URL": "http://172.238.81.245:3000"
+      "API_BASE_URL": "http://172.238.81.245:3000",
+      "router": {},
+      "eas": {
+        "projectId": "938eee41-15bc-48ce-ba60-82b4eef40efe"
+      }
     }
   }
 }
