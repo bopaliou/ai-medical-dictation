@@ -29,37 +29,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
 
-  // Configuration "Gold Standard" pour la dictée vocale AI (Whisper/Gemini)
-  // Format: AAC (m4a) @ 64kbps, 16kHz, Mono
-  // Optimisations: Voice Communication (Echo Cancellation, Noise Suppression)
-  const customPreset = {
-    ...RecordingPresets.HIGH_QUALITY,
-    android: {
-      extension: '.m4a',
-      outputFormat: 'mpeg_4', // String type required
-      audioEncoder: 'aac', // String type required
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      bitRate: 64000, // 64 kbps (suffisant pour la voix, upload rapide)
-      // Note: audioSource is usually an Int in some libraries but expo-audio might prefer we omitted it if using presets.
-      // We'll trust the preset and explicit codec settings for now to avoid casting errors if type is strict.
-    },
-    ios: {
-      extension: '.m4a',
-      outputFormat: 'mpeg4aac', // kAudioFormatMPEG4AAC
-      audioQuality: 3, // High
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      bitRate: 64000,
-      linearPCMBitDepth: 16,
-      linearPCMIsBigEndian: false,
-      linearPCMIsFloat: false,
-    },
-    web: {
-      mimeType: 'audio/webm;codecs=opus',
-      bitsPerSecond: 64000,
-    },
-  } as any;
+  // Configuration optimisée pour la reconnaissance vocale AI
+  // Utilise HIGH_QUALITY preset avec des paramètres de base pour éviter les erreurs de type
+  const customPreset = RecordingPresets.HIGH_QUALITY;
 
   // Créer le recorder avec le hook expo-audio
   const recorder = useExpoAudioRecorder(customPreset, (status) => {
