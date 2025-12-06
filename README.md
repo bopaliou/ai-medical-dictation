@@ -11,8 +11,9 @@
 
 ## Fonctionnalités
 
-- **Application mobile** : Interface intuitive pour enregistrer et gérer les dictées médicales
+- **Interface Premium "Antigravity"** : Design moderne et épuré avec typographie soignée (Inter/Poppins), animations fluides et interactions "glassmorphism".
 - **Transcription automatique** : Via Whisper.cpp local (WSL)
+- **Enregistrement Avancé** : Visualisation de l'onde audio en temps réel pendant la dictée.
 - **Structuration intelligente** : JSON via Gemini 2.5 Flash (extraction de vitals, médicaments, soins, observations, flags)
 - **Génération PDF** : Standardisée (< 150 KB) au format SOAPIE
 - **Gestion des patients** : Création, modification et consultation des dossiers patients
