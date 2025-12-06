@@ -9,9 +9,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// ============================================================================
 // CONFIGURATION DESIGN (Basée sur la maquette officielle)
 // ============================================================================
+
+console.log('PDF Generator Service initialized');
 
 const MARGINS = { top: 50, bottom: 60, left: 45, right: 45 };
 
@@ -149,19 +150,19 @@ function renderHeader(doc, recordedAt, createdAt) {
   // Bannière bleue premium (hauteur 60px pour plus d'espace)
   const bannerHeight = 60;
   const bannerY = 0;
-  
+
   // Bannière avec dégradé simulé (couleur principale)
   doc.rect(0, bannerY, pageWidth, bannerHeight)
     .fillColor(COLORS.primary)
     .fill();
-  
+
   // Chemin du logo (depuis le backend, relatif au projet)
   const possiblePaths = [
     path.join(__dirname, '../../mobile/mobile-app/assets/images/logo-kadducare.png'),
     path.join(__dirname, '../../../mobile/mobile-app/assets/images/logo-kadducare.png'),
     path.join(process.cwd(), 'mobile/mobile-app/assets/images/logo-kadducare.png'),
   ];
-  
+
   let logoPath = null;
   for (const possiblePath of possiblePaths) {
     if (fs.existsSync(possiblePath)) {
@@ -169,17 +170,17 @@ function renderHeader(doc, recordedAt, createdAt) {
       break;
     }
   }
-  
+
   const headerY = bannerY + 14; // Position verticale dans le header (centré verticalement)
   let currentX = MARGINS.left;
-  
+
   // Logo KadduCare Pro (32px pour un look premium)
   if (logoPath) {
     try {
       const logoSize = 32;
       const logoY = bannerY + (bannerHeight - logoSize) / 2; // Centré verticalement
-      doc.image(logoPath, currentX, logoY, { 
-        width: logoSize, 
+      doc.image(logoPath, currentX, logoY, {
+        width: logoSize,
         height: logoSize,
         fit: [logoSize, logoSize]
       });
@@ -188,7 +189,7 @@ function renderHeader(doc, recordedAt, createdAt) {
       console.warn('⚠️ Impossible de charger le logo:', logoError.message);
     }
   }
-  
+
   // Texte "KadduCare" Pro (22px, Bold, blanc, letter-spacing -0.5px)
   doc.fontSize(22)
     .fillColor(COLORS.textWhite)
@@ -196,11 +197,11 @@ function renderHeader(doc, recordedAt, createdAt) {
     .text('KadduCare', currentX, headerY, {
       characterSpacing: -0.5
     });
-  
+
   // Mesurer la largeur du texte "KadduCare" pour positionner le titre
   const kadduCareWidth = doc.widthOfString('KadduCare', { font: FONTS.title, fontSize: 22 });
   const subtitleX = currentX + kadduCareWidth + 10;
-  
+
   // Titre "Rapport Infirmier (Format SOAPIE)" (12px, blanc, opacity simulée avec gris très clair)
   doc.fontSize(12)
     .fillColor('#F5F5F5') // Simule opacity 0.95
@@ -212,7 +213,7 @@ function renderHeader(doc, recordedAt, createdAt) {
   const timeStr = formatTime(dateTime);
   const dateTimeStr = `${dateStr} | ${timeStr}`;
   const rightX = pageWidth - MARGINS.right;
-  
+
   doc.fontSize(10)
     .fillColor('#E8E8E8') // Simule opacity 0.9
     .font(FONTS.body)
