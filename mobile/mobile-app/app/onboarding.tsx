@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useOnboarding } from '@/hooks/useOnboarding';
+import { useOnboarding } from '@/contexts/OnboardingContext';
 import { Onboarding1Svg, Onboarding2Svg, Onboarding3Svg } from '@/components/OnboardingIllustrations';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -87,11 +87,11 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar style="auto" />
-      
+
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <Image 
-            source={require('@/assets/images/logo-kadducare.png')} 
+          <Image
+            source={require('@/assets/images/logo-kadducare.png')}
             style={styles.logo}
             resizeMode="contain"
           />

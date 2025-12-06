@@ -6,7 +6,7 @@ import * as SplashScreenNative from 'expo-splash-screen';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useOnboarding } from '@/hooks/useOnboarding';
+import { OnboardingProvider, useOnboarding } from '@/contexts/OnboardingContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import SplashScreen from '@/components/SplashScreen';
@@ -175,7 +175,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootLayoutNav />
+        <OnboardingProvider>
+          <RootLayoutNav />
+        </OnboardingProvider>
       </AuthProvider>
     </ThemeProvider>
   );
