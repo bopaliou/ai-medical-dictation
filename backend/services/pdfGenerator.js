@@ -1,7 +1,11 @@
 /**
  * Service de génération PDF médical KadduCare
- * Design pixel-perfect basé sur la maquette officielle
- * Reproduction exacte du design premium KadduCare
+ * Design "Silicon Valley" - Clean, Modern, Purposeful.
+ * 
+ * DESIGN SYSTEM:
+ * - Font: Helvetica (Standard)
+ * - Colors: Royal Blue (#258bef), Medical Green (#22c55e), Slate (#1e293b, #64748b)
+ * - Layout: Invisible 12-column grid, ample whitespace
  */
 
 const PDFDocument = require('pdfkit');
@@ -9,74 +13,67 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// CONFIGURATION DESIGN (Basée sur la maquette officielle)
+// ============================================================================
+// DESIGN CONFIGURATION
 // ============================================================================
 
-console.log('PDF Generator Service initialized');
+const CONFIG = {
+  margins: { top: 50, bottom: 50, left: 50, right: 50 },
+  width: 595.28, // A4 width in points
+  height: 841.89, // A4 height in points
+};
 
-const MARGINS = { top: 50, bottom: 60, left: 45, right: 45 };
-
-// Couleurs exactes de la maquette
 const COLORS = {
-  // Sections SOAPIE (couleurs exactes de la maquette)
-  sectionS: '#007BFF',        // Bleu pour Subjectif
-  sectionO: '#007BFF',        // Bleu pour Objectif
-  sectionA: '#009b5a',        // Vert foncé pour Analyse
-  sectionP: '#00C853',        // Vert pour Plan
-  sectionI: '#0057A3',        // Bleu foncé pour Intervention
-  sectionE: '#5A6C7A',        // Bleu-gris pour Évaluation
-
-  // Textes
-  text: '#1B1B1D',           // Noir principal
-  textSecondary: '#4A4A4A',   // Gris moyen
-  textMuted: '#8E8E93',       // Gris clair
-  textWhite: '#FFFFFF',       // Blanc
-
-  // Backgrounds
-  background: '#FFFFFF',      // Blanc pur
-  cardBg: '#F7F9FC',         // Fond carte patient (bleu très clair)
-  tableBg: '#F2F6FC',        // Fond tableau (bleu très clair)
-  tableAlt: '#FAFBFD',       // Fond alterné tableau
-
-  // Bordures
-  border: '#E0E0E0',         // Bordure standard
-  borderLight: '#F0F0F0',     // Bordure légère
-
-  // KadduCare brand
-  primary: '#1A73E8',        // Bleu KadduCare
+  primary: '#258bef',       // Royal Blue - Headers, Actions
+  success: '#22c55e',       // Medical Green - Vitals, Plans
+  text: {
+    dark: '#1e293b',        // Slate 800 - Main Content
+    base: '#334155',        // Slate 700 - Body Text
+    light: '#64748b',       // Slate 500 - Metadata, Labels
+    muted: '#94a3b8',       // Slate 400 - Footers
+  },
+  bg: {
+    light: '#f8fafc',       // Slate 50 - Subtle Backgrounds
+    white: '#ffffff',       // Pure White
+  },
+  border: '#e2e8f0',        // Slate 200 - Dividers
+  sections: {
+    S: '#258bef', // Subjectif (Blue)
+    O: '#258bef', // Objectif (Blue)
+    A: '#8b5cf6', // Analyse (Purple)
+    P: '#22c55e', // Plan (Green)
+    I: '#0ea5e9', // Intervention (Sky)
+    E: '#64748b', // Evaluation (Slate)
+  }
 };
 
-// Typographie (Inter/SF Pro/Roboto)
 const FONTS = {
-  title: 'Helvetica-Bold',
-  body: 'Helvetica',
-  bodyBold: 'Helvetica-Bold',
-};
-
-// Espacements (basés sur la maquette)
-const SPACING = {
-  sectionGap: 24,            // Espace entre sections
-  blockPadding: 16,          // Padding interne
-  lineGap: 6,                // Interligne (1.45)
-  paragraphGap: 12,          // Entre paragraphes
+  regular: 'Helvetica',
+  bold: 'Helvetica-Bold',
+  // Sizes
+  xs: 8,
+  sm: 9,
+  base: 10,
+  lg: 12,
+  xl: 14,
+  xxl: 22,
 };
 
 // ============================================================================
-// UTILITAIRES
+// UTILITIES
 // ============================================================================
 
-function safeValue(value) {
-  if (value === null || value === undefined) return 'Non renseigné';
-  if (typeof value === 'string' && value.trim() === '') return 'Non renseigné';
-  return String(value).trim();
+function safe(val) {
+  if (val === null || val === undefined) return 'Non renseigné';
+  if (typeof val === 'string' && val.trim() === '') return 'Non renseigné';
+  return String(val).trim();
 }
 
-function isEmpty(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string' && value.trim() === '') return true;
-  if (typeof value === 'object' && Object.keys(value).length === 0) return true;
-  if (Array.isArray(value) && value.length === 0) return true;
-  return false;
+function isEmpty(val) {
+  if (!val) return true;
+  if (Array.isArray(val) && val.length === 0) return true;
+  if (typeof val === 'object' && Object.keys(val).length === 0) return true;
+  return String(val).trim() === '';
 }
 
 function calculateAge(dob) {
@@ -84,700 +81,398 @@ function calculateAge(dob) {
   try {
     const birthDate = new Date(dob);
     if (isNaN(birthDate.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-    return `${age} ans`;
+    const diff = Date.now() - birthDate.getTime();
+    const ageDate = new Date(diff);
+    return Math.abs(ageDate.getUTCFullYear() - 1970) + " ans";
   } catch { return null; }
 }
 
 function formatDate(date) {
   if (!date) return '';
-  try {
-    const d = new Date(date);
-    const day = d.getDate();
-    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-    const month = monthNames[d.getMonth()];
-    const year = d.getFullYear();
-    return `${day} ${month} ${year}`;
-  } catch { return ''; }
+  return new Date(date).toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  });
 }
 
 function formatTime(date) {
   if (!date) return '';
-  try {
-    const d = new Date(date);
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
-  } catch { return ''; }
+  return new Date(date).toLocaleTimeString('fr-FR', {
+    hour: '2-digit', minute: '2-digit'
+  });
 }
 
-function ensurePageSpace(doc, height) {
-  if (doc.page.height - doc.y - MARGINS.bottom < height) {
+// Ensure space for content, adding a page if needed
+function ensureSpace(doc, height) {
+  if (doc.y + height > CONFIG.height - CONFIG.margins.bottom) {
     doc.addPage();
-    doc.y = MARGINS.top;
+    return true; // New page added
   }
-}
-
-function formatVital(value, type) {
-  if (!value) return '--';
-  const v = String(value).replace(',', '.').trim();
-  const num = parseFloat(v);
-  if (isNaN(num)) return v;
-
-  switch (type) {
-    case 'temp': return `${num.toLocaleString('fr-FR')}°C`;
-    case 'hr': return `${Math.round(num)} bpm`;
-    case 'rr': return `${Math.round(num)} cycles/min`;
-    case 'spo2': return `${Math.round(num)}%`;
-    case 'bp': return `${v} mmHg`;
-    case 'glycemia': return `${v} g/L`;
-    default: return v;
-  }
+  return false;
 }
 
 // ============================================================================
-// HEADER (Reproduction exacte de la maquette)
+// RENDERING HELPERS (The "Engine" of the Design)
+// ============================================================================
+
+/**
+ * Draws a clean, modern "Pill" tag
+ */
+function drawPill(doc, text, x, y, color = COLORS.primary) {
+  doc.font(FONTS.bold).fontSize(FONTS.xs);
+  const textWidth = doc.widthOfString(text);
+  const paddingX = 8;
+  const paddingY = 4;
+  const height = FONTS.xs + paddingY * 2;
+  const width = textWidth + paddingX * 2;
+
+  // Background
+  doc.roundedRect(x, y, width, height, height / 2) // Fully rounded
+    .fillColor(color)
+    .fillOpacity(0.1) // Subtle background
+    .fill();
+
+  doc.fillOpacity(1); // Reset opacity for text
+
+  // Text
+  doc.fillColor(color)
+    .text(text, x + paddingX, y + paddingY + 1); // +1 mostly for vertical centering optical adjustment
+
+  return { width, height };
+}
+
+/**
+ * Draws a section header with a thin modern vertical bar
+ */
+function renderSectionHeader(doc, letter, title, color) {
+  ensureSpace(doc, 40);
+
+  const startY = doc.y + 10;
+
+  // Thin vertical bar
+  doc.rect(CONFIG.margins.left, startY, 2, 16)
+    .fillColor(color)
+    .fill();
+
+  // Letter Code
+  doc.font(FONTS.bold).fontSize(FONTS.lg)
+    .fillColor(color)
+    .text(letter, CONFIG.margins.left + 10, startY + 2);
+
+  // Title
+  doc.font(FONTS.bold).fontSize(FONTS.lg)
+    .fillColor(COLORS.text.dark)
+    .text(title, CONFIG.margins.left + 30, startY + 2);
+
+  doc.y = startY + 30; // Margin after header
+}
+
+// ============================================================================
+// COMPONENT RENDERERS
 // ============================================================================
 
 function renderHeader(doc, recordedAt, createdAt) {
-  const dateTime = recordedAt || createdAt || new Date();
-  const pageWidth = doc.page.width;
+  const contentWidth = CONFIG.width - CONFIG.margins.left - CONFIG.margins.right;
+  const y = CONFIG.margins.top;
 
-  // Bannière bleue premium (hauteur 60px pour plus d'espace)
-  const bannerHeight = 60;
-  const bannerY = 0;
-
-  // Bannière avec dégradé simulé (couleur principale)
-  doc.rect(0, bannerY, pageWidth, bannerHeight)
-    .fillColor(COLORS.primary)
-    .fill();
-
-  // Chemin du logo (depuis le backend, relatif au projet)
+  // 1. Logo Logic
   const possiblePaths = [
     path.join(__dirname, '../../mobile/mobile-app/assets/images/logo-kadducare.png'),
-    path.join(__dirname, '../../../mobile/mobile-app/assets/images/logo-kadducare.png'),
     path.join(process.cwd(), 'mobile/mobile-app/assets/images/logo-kadducare.png'),
+    // Fallback if needed
   ];
+  let logoPath = possiblePaths.find(p => fs.existsSync(p));
 
-  let logoPath = null;
-  for (const possiblePath of possiblePaths) {
-    if (fs.existsSync(possiblePath)) {
-      logoPath = possiblePath;
-      break;
-    }
-  }
-
-  const headerY = bannerY + 14; // Position verticale dans le header (centré verticalement)
-  let currentX = MARGINS.left;
-
-  // Logo KadduCare Pro (32px pour un look premium)
   if (logoPath) {
-    try {
-      const logoSize = 32;
-      const logoY = bannerY + (bannerHeight - logoSize) / 2; // Centré verticalement
-      doc.image(logoPath, currentX, logoY, {
-        width: logoSize,
-        height: logoSize,
-        fit: [logoSize, logoSize]
-      });
-      currentX += logoSize + 12; // Espacement après le logo
-    } catch (logoError) {
-      console.warn('⚠️ Impossible de charger le logo:', logoError.message);
-    }
+    doc.image(logoPath, CONFIG.margins.left, y, { width: 32, height: 32 });
   }
 
-  // Texte "KadduCare" Pro (22px, Bold, blanc, letter-spacing -0.5px)
-  doc.fontSize(22)
-    .fillColor(COLORS.textWhite)
-    .font(FONTS.title)
-    .text('KadduCare', currentX, headerY, {
-      characterSpacing: -0.5
-    });
+  // 2. Brand Name
+  doc.font(FONTS.bold).fontSize(FONTS.xxl)
+    .fillColor(COLORS.text.dark)
+    .text('KadduCare', CONFIG.margins.left + (logoPath ? 42 : 0), y - 2, { characterSpacing: -0.5 }); // Tighter spacing
 
-  // Mesurer la largeur du texte "KadduCare" pour positionner le titre
-  const kadduCareWidth = doc.widthOfString('KadduCare', { font: FONTS.title, fontSize: 22 });
-  const subtitleX = currentX + kadduCareWidth + 10;
+  // 3. Document Badge (Right Aligned)
+  const badgeText = "RAPPORT MÉDICAL";
+  doc.font(FONTS.bold).fontSize(FONTS.xs);
+  const badgeWidth = doc.widthOfString(badgeText) + 20;
+  const badgeX = CONFIG.width - CONFIG.margins.right - badgeWidth;
 
-  // Titre "Rapport Infirmier (Format SOAPIE)" (12px, blanc, opacity simulée avec gris très clair)
-  doc.fontSize(12)
-    .fillColor('#F5F5F5') // Simule opacity 0.95
-    .font(FONTS.body)
-    .text('Rapport Infirmier (Format SOAPIE)', subtitleX, headerY + 2);
+  drawPill(doc, badgeText, badgeX, y + 4, COLORS.text.dark);
 
-  // Date et Heure (10px, blanc, opacity 0.9, aligné droite)
-  const dateStr = formatDate(dateTime);
-  const timeStr = formatTime(dateTime);
-  const dateTimeStr = `${dateStr} | ${timeStr}`;
-  const rightX = pageWidth - MARGINS.right;
+  // 4. Metadata Line (Date)
+  doc.y = y + 40;
+  const dateStr = formatDate(recordedAt || createdAt);
+  const timeStr = formatTime(recordedAt || createdAt);
 
-  doc.fontSize(10)
-    .fillColor('#E8E8E8') // Simule opacity 0.9
-    .font(FONTS.body)
-    .text(dateTimeStr, rightX, headerY + 3, { align: 'right', width: 250 });
+  doc.font(FONTS.regular).fontSize(FONTS.sm)
+    .fillColor(COLORS.text.light)
+    .text(`${dateStr} à ${timeStr}`, CONFIG.margins.left, doc.y);
 
-  // Position de départ pour le contenu (après la bannière + marge)
-  doc.y = bannerY + bannerHeight + 20;
-
-  // Ligne de séparation fine
-  doc.moveTo(MARGINS.left, doc.y - 5)
-    .lineTo(pageWidth - MARGINS.right, doc.y - 5)
+  // 5. Divider
+  doc.moveTo(CONFIG.margins.left, doc.y + 15)
+    .lineTo(CONFIG.width - CONFIG.margins.right, doc.y + 15)
+    .lineWidth(0.5)
     .strokeColor(COLORS.border)
-    .lineWidth(1)
     .stroke();
 
-  doc.y = MARGINS.top + 30;
+  doc.y += 30;
 }
 
-// ============================================================================
-// BLOC PATIENT (Carte arrondie avec fond #F7F9FC)
-// ============================================================================
+function renderPatientInfo(doc, patient) {
+  const startY = doc.y;
+  const colWidth = (CONFIG.width - CONFIG.margins.left - CONFIG.margins.right) / 4;
 
-function renderPatientCard(doc, patientData, contentWidth) {
-  ensurePageSpace(doc, 100);
+  // Helper to draw a data point
+  const drawStat = (label, value, colIndex) => {
+    const x = CONFIG.margins.left + (colIndex * colWidth);
 
-  const cardY = doc.y;
-  const cardHeight = 80;
-  const cardPadding = 16;
-  const borderRadius = 12;
+    doc.font(FONTS.bold).fontSize(FONTS.xs)
+      .fillColor(COLORS.text.light)
+      .text(label.toUpperCase(), x, startY);
 
-  // Carte arrondie avec fond #F7F9FC
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, borderRadius)
-    .fillColor(COLORS.cardBg)
-    .fill();
+    doc.font(FONTS.bold).fontSize(FONTS.lg)
+      .fillColor(COLORS.text.dark)
+      .text(value, x, startY + 14);
+  };
 
-  // Bordure subtile
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, borderRadius)
-    .strokeColor(COLORS.borderLight)
-    .lineWidth(1)
-    .stroke();
+  const name = safe(patient.full_name);
+  const age = safe(patient.age || calculateAge(patient.dob)); // Fallback
+  const gender = safe(patient.gender);
+  const location = patient.unit
+    ? `${patient.unit}${patient.room_number ? ` / ${patient.room_number}` : ''}`
+    : safe(patient.room_number);
 
-  const colWidth = (contentWidth - cardPadding * 3) / 2;
-  const textY = cardY + cardPadding;
+  drawStat("PATIENT", name, 0);
+  drawStat("ÂGE", age, 1.5); // Offset column
+  drawStat("SEXE", gender, 2.2);
+  drawStat("SERVICE", location, 3);
 
-  // Colonne 1 : Nom complet et Âge
-  doc.fontSize(9)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.body)
-    .text('Nom complet:', MARGINS.left + cardPadding, textY);
-
-  doc.fontSize(12)
-    .fillColor(COLORS.text)
-    .font(FONTS.bodyBold)
-    .text(safeValue(patientData.full_name), MARGINS.left + cardPadding, textY + 12);
-
-  doc.fontSize(9)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.body)
-    .text('Âge:', MARGINS.left + cardPadding, textY + 36);
-
-  doc.fontSize(12)
-    .fillColor(COLORS.text)
-    .font(FONTS.body)
-    .text(safeValue(patientData.age || '--'), MARGINS.left + cardPadding, textY + 48);
-
-  // Colonne 2 : Sexe et Unité/Service
-  const col2X = MARGINS.left + cardPadding + colWidth + cardPadding;
-
-  doc.fontSize(9)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.body)
-    .text('Sexe:', col2X, textY);
-
-  doc.fontSize(12)
-    .fillColor(COLORS.text)
-    .font(FONTS.body)
-    .text(safeValue(patientData.gender || '--'), col2X, textY + 12);
-
-  doc.fontSize(9)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.body)
-    .text('Unité / Service:', col2X, textY + 36);
-
-  const unitText = `${safeValue(patientData.unit || '--')}${patientData.room_number ? ` - Aile ${patientData.room_number}` : ''}`;
-  doc.fontSize(12)
-    .fillColor(COLORS.text)
-    .font(FONTS.body)
-    .text(unitText, col2X, textY + 48, { width: colWidth });
-
-  doc.y = cardY + cardHeight + SPACING.sectionGap;
+  doc.y = startY + 45; // Space after patient info
 }
 
-// ============================================================================
-// EN-TÊTE DE SECTION SOAPIE (Lettre colorée + barre verticale)
-// ============================================================================
+function renderVitals(doc, vitals) {
+  if (isEmpty(vitals)) return;
 
-function renderSectionHeader(doc, letter, title, color) {
-  ensurePageSpace(doc, 40);
+  renderSectionHeader(doc, 'O', 'Signes Vitaux & Objectif', COLORS.sections.O);
 
-  const sectionY = doc.y;
-  const barWidth = 4;
-  const barHeight = 24;
+  const contentWidth = CONFIG.width - CONFIG.margins.left - CONFIG.margins.right;
+  const rowHeight = 24;
 
-  // Barre verticale colorée à gauche
-  doc.rect(MARGINS.left, sectionY, barWidth, barHeight)
-    .fillColor(color)
-    .fill();
+  // Table Header (Minimal)
+  // No drawn header, just list
 
-  // Lettre + Titre (ex: "S – Subjectif")
-  doc.fontSize(16)
-    .fillColor(color)
-    .font(FONTS.title)
-    .text(`${letter} – ${title}`, MARGINS.left + barWidth + 10, sectionY + 2);
-
-  doc.y = sectionY + barHeight + 12;
-}
-
-// ============================================================================
-// SECTION S - SUBJECTIF
-// ============================================================================
-
-function renderSubjective(doc, content, contentWidth) {
-  if (isEmpty(content)) return;
-
-  renderSectionHeader(doc, 'S', 'Subjectif', COLORS.sectionS);
-
-  // Texte dans une carte légère
-  const cardY = doc.y;
-  const textPadding = 12;
-
-  // Calculer la hauteur nécessaire
-  doc.fontSize(11)
-    .fillColor(COLORS.text)
-    .font(FONTS.body);
-
-  const textContent = Array.isArray(content) ? content.join('. ') : String(content).trim();
-  const textHeight = doc.heightOfString(textContent, {
-    width: contentWidth - textPadding * 2,
-    lineGap: SPACING.lineGap
-  });
-
-  const cardHeight = textHeight + textPadding * 2;
-
-  // Carte arrondie
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 8)
-    .fillColor('#FAFBFD')
-    .fill();
-
-  // Texte
-  doc.fontSize(11)
-    .fillColor(COLORS.text)
-    .font(FONTS.body)
-    .text(textContent, MARGINS.left + textPadding, cardY + textPadding, {
-      width: contentWidth - textPadding * 2,
-      align: 'left',
-      lineGap: SPACING.lineGap
-    });
-
-  doc.y = cardY + cardHeight + SPACING.sectionGap;
-}
-
-// ============================================================================
-// SECTION O - OBJECTIF (Tableau + Examen physique)
-// ============================================================================
-
-function renderObjective(doc, objective, contentWidth) {
-  if (!objective) return;
-
-  renderSectionHeader(doc, 'O', 'Objectif', COLORS.sectionO);
-
-  const vitals = objective.vitals || {};
-
-  // Tableau des signes vitaux
-  const tableY = doc.y;
-  const col1Width = contentWidth * 0.45;
-  const col2Width = contentWidth * 0.55;
-  const rowHeight = 22;
-
-  // En-tête du tableau (fond bleu clair)
-  doc.rect(MARGINS.left, tableY, contentWidth, 24)
-    .fillColor(COLORS.tableBg)
-    .fill();
-
-  doc.fontSize(10)
-    .fillColor(COLORS.textSecondary)
-    .font(FONTS.bodyBold)
-    .text('Mesure', MARGINS.left + 8, tableY + 8);
-
-  doc.text('Valeur / Observations', MARGINS.left + col1Width + 8, tableY + 8);
-
-  let currentY = tableY + 24;
-
-  // Lignes du tableau
-  const vitalsList = [
-    { label: 'Tension Artérielle (TA)', value: formatVital(vitals.blood_pressure, 'bp') },
-    { label: 'Fréquence Cardiaque (FC)', value: formatVital(vitals.heart_rate, 'hr') },
-    { label: 'Température', value: formatVital(vitals.temperature, 'temp') },
-    { label: 'Fréquence Respiratoire (FR)', value: formatVital(vitals.respiratory_rate, 'rr') },
-    { label: 'Saturation en Oxygène (SpO2)', value: formatVital(vitals.spo2, 'spo2') },
+  const items = [
+    { label: "Tension Artérielle", value: vitals.blood_pressure, unit: "mmHg" },
+    { label: "Fréquence Cardiaque", value: vitals.heart_rate, unit: "bpm" },
+    { label: "Fréquence Respiratoire", value: vitals.respiratory_rate, unit: "rpm" },
+    { label: "Température", value: vitals.temperature, unit: "°C" },
+    { label: "SpO2", value: vitals.spo2, unit: "%" },
+    { label: "Glycémie", value: vitals.glycemia, unit: "g/L" },
   ];
 
-  vitalsList.forEach((vital, index) => {
-    if (vital.value !== '--') {
-      // Fond alterné
-      if (index % 2 === 0) {
-        doc.rect(MARGINS.left, currentY, contentWidth, rowHeight)
-          .fillColor(COLORS.tableAlt)
-          .fill();
-      }
+  const validItems = items.filter(i => !isEmpty(i.value));
 
-      // Label
-      doc.fontSize(10)
-        .fillColor(COLORS.text)
-        .font(FONTS.body)
-        .text(vital.label, MARGINS.left + 8, currentY + 6, { width: col1Width - 16 });
-
-      // Valeur
-      doc.fontSize(10)
-        .fillColor(COLORS.text)
-        .font(FONTS.body)
-        .text(vital.value, MARGINS.left + col1Width + 8, currentY + 6, {
-          width: col2Width - 16,
-          align: 'left'
-        });
-
-      currentY += rowHeight;
-    }
-  });
-
-  doc.y = currentY + 12;
-
-  // Examen Physique (carte)
-  if (!isEmpty(objective.exam)) {
-    const examY = doc.y;
-    const examPadding = 12;
-
-    // Titre
-    doc.fontSize(12)
-      .fillColor(COLORS.sectionO)
-      .font(FONTS.bodyBold)
-      .text('Examen Physique', MARGINS.left, examY);
-
-    doc.y += 8;
-
-    // Carte
-    const textContent = String(objective.exam).trim();
-    const textHeight = doc.heightOfString(textContent, {
-      width: contentWidth - examPadding * 2,
-      lineGap: SPACING.lineGap
-    });
-
-    const cardHeight = textHeight + examPadding * 2;
-    const cardY = doc.y;
-
-    doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 8)
-      .fillColor('#FAFBFD')
-      .fill();
-
-    doc.fontSize(11)
-      .fillColor(COLORS.text)
-      .font(FONTS.body)
-      .text(textContent, MARGINS.left + examPadding, cardY + examPadding, {
-        width: contentWidth - examPadding * 2,
-        align: 'left',
-        lineGap: SPACING.lineGap
-      });
-
-    doc.y = cardY + cardHeight + 12;
+  if (validItems.length === 0) {
+    doc.font(FONTS.regular).fontSize(FONTS.base)
+      .fillColor(COLORS.text.light)
+      .text("Aucun signe vital enregistré.", CONFIG.margins.left);
+    doc.y += 20;
+    return;
   }
 
-  doc.y += SPACING.sectionGap;
-}
+  // Draw Grid
+  validItems.forEach(item => {
+    const y = doc.y;
 
-// ============================================================================
-// SECTION A - ANALYSE
-// ============================================================================
+    // Label
+    doc.font(FONTS.regular).fontSize(FONTS.base)
+      .fillColor(COLORS.text.base)
+      .text(item.label, CONFIG.margins.left, y + 6);
 
-function renderAnalysis(doc, content, contentWidth) {
-  if (isEmpty(content)) return;
+    // Value (Right Aligned)
+    const valueText = `${item.value} ${item.unit}`;
+    doc.font(FONTS.bold).fontSize(FONTS.base)
+      .fillColor(COLORS.text.dark)
+      .text(valueText, CONFIG.margins.left, y + 6, {
+        align: 'right',
+        width: contentWidth
+      });
 
-  renderSectionHeader(doc, 'A', 'Analyse', COLORS.sectionA);
-
-  const cardY = doc.y;
-  const textPadding = 12;
-
-  const textContent = String(content).trim();
-  const textHeight = doc.heightOfString(textContent, {
-    width: contentWidth - textPadding * 2,
-    lineGap: SPACING.lineGap
-  });
-
-  const cardHeight = textHeight + textPadding * 2;
-
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 8)
-    .fillColor('#FAFBFD')
-    .fill();
-
-  doc.fontSize(11)
-    .fillColor(COLORS.text)
-    .font(FONTS.body)
-    .text(textContent, MARGINS.left + textPadding, cardY + textPadding, {
-      width: contentWidth - textPadding * 2,
-      align: 'left',
-      lineGap: SPACING.lineGap
-    });
-
-  doc.y = cardY + cardHeight + SPACING.sectionGap;
-}
-
-// ============================================================================
-// SECTION P - PLAN DE SOINS (Checkboxes vertes)
-// ============================================================================
-
-function renderPlan(doc, content, contentWidth) {
-  if (isEmpty(content)) return;
-
-  renderSectionHeader(doc, 'P', 'Plan de soins', COLORS.sectionP);
-
-  const items = Array.isArray(content)
-    ? content
-    : String(content).trim().split(/[.!?]+/).filter(s => s.trim());
-
-  items.forEach(item => {
-    if (item && String(item).trim()) {
-      const itemY = doc.y;
-
-      // Checkbox verte (carré avec checkmark)
-      const checkSize = 12;
-      doc.rect(MARGINS.left, itemY + 2, checkSize, checkSize)
-        .fillColor(COLORS.sectionP)
-        .fill();
-
-      // Checkmark blanc
-      doc.fontSize(10)
-        .fillColor('#FFFFFF')
-        .font(FONTS.bodyBold)
-        .text('✓', MARGINS.left + 2, itemY + 1);
-
-      // Texte
-      doc.fontSize(11)
-        .fillColor(COLORS.text)
-        .font(FONTS.body)
-        .text(String(item).trim(), MARGINS.left + checkSize + 8, itemY, {
-          width: contentWidth - checkSize - 8,
-          align: 'left',
-          lineGap: SPACING.lineGap
-        });
-
-      doc.y += 8;
-    }
-  });
-
-  doc.y += SPACING.sectionGap;
-}
-
-// ============================================================================
-// SECTION I - INTERVENTIONS (Puces bleues)
-// ============================================================================
-
-function renderIntervention(doc, content, contentWidth) {
-  if (isEmpty(content)) return;
-
-  renderSectionHeader(doc, 'I', 'Interventions réalisées', COLORS.sectionI);
-
-  const items = Array.isArray(content)
-    ? content
-    : String(content).trim().split(/[.!?]+/).filter(s => s.trim());
-
-  items.forEach(item => {
-    if (item && String(item).trim()) {
-      const itemY = doc.y;
-
-      // Puce bleue ronde
-      doc.circle(MARGINS.left + 4, itemY + 6, 3)
-        .fillColor(COLORS.sectionI)
-        .fill();
-
-      // Texte
-      doc.fontSize(11)
-        .fillColor(COLORS.text)
-        .font(FONTS.body)
-        .text(String(item).trim(), MARGINS.left + 14, itemY, {
-          width: contentWidth - 14,
-          align: 'left',
-          lineGap: SPACING.lineGap
-        });
-
-      doc.y += 8;
-    }
-  });
-
-  doc.y += SPACING.sectionGap;
-}
-
-// ============================================================================
-// SECTION E - ÉVALUATION
-// ============================================================================
-
-function renderEvaluation(doc, content, contentWidth) {
-  if (isEmpty(content)) return;
-
-  renderSectionHeader(doc, 'E', 'Évaluation', COLORS.sectionE);
-
-  const cardY = doc.y;
-  const textPadding = 12;
-
-  const textContent = String(content).trim();
-  const textHeight = doc.heightOfString(textContent, {
-    width: contentWidth - textPadding * 2,
-    lineGap: SPACING.lineGap
-  });
-
-  const cardHeight = textHeight + textPadding * 2;
-
-  doc.roundedRect(MARGINS.left, cardY, contentWidth, cardHeight, 8)
-    .fillColor('#FAFBFD')
-    .fill();
-
-  doc.fontSize(11)
-    .fillColor(COLORS.text)
-    .font(FONTS.body)
-    .text(textContent, MARGINS.left + textPadding, cardY + textPadding, {
-      width: contentWidth - textPadding * 2,
-      align: 'left',
-      lineGap: SPACING.lineGap
-    });
-
-  doc.y = cardY + cardHeight + SPACING.sectionGap;
-}
-
-// ============================================================================
-// FOOTER
-// ============================================================================
-
-function renderFooter(doc, user) {
-  const pageRange = doc.bufferedPageRange();
-  const pageCount = pageRange.count;
-  const startPage = pageRange.start || 0;
-
-  for (let i = startPage; i < startPage + pageCount; i++) {
-    doc.switchToPage(i);
-    const footerY = doc.page.height - MARGINS.bottom + 20;
-
-    // Ligne fine grise
-    doc.moveTo(MARGINS.left, footerY - 10)
-      .lineTo(doc.page.width - MARGINS.right, footerY - 10)
+    // Divider
+    doc.moveTo(CONFIG.margins.left, y + rowHeight)
+      .lineTo(CONFIG.width - CONFIG.margins.right, y + rowHeight)
+      .lineWidth(0.5)
       .strokeColor(COLORS.border)
-      .lineWidth(1)
       .stroke();
 
-    // Gauche : Mention
-    doc.fontSize(8)
-      .fillColor(COLORS.textMuted)
-      .font(FONTS.body)
-      .text('Document généré automatiquement — KadduCare', MARGINS.left, footerY);
+    doc.y += rowHeight;
+  });
 
-    // Centre : Pagination
-    doc.fontSize(8)
-      .fillColor(COLORS.textMuted)
-      .text(`Page ${i - startPage + 1} sur ${pageCount}`, MARGINS.left, footerY, {
-        width: doc.page.width - MARGINS.left - MARGINS.right,
-        align: 'center'
+  doc.y += 20; // Margin after vitals
+
+  // Exam Note if exists
+  if (vitals.exam && !isEmpty(vitals.exam)) {
+    doc.font(FONTS.bold).fontSize(FONTS.sm)
+      .fillColor(COLORS.text.light)
+      .text("EXAMEN PHYSIQUE", CONFIG.margins.left, doc.y);
+
+    doc.moveDown(0.5);
+    doc.font(FONTS.regular).fontSize(FONTS.base)
+      .fillColor(COLORS.text.base)
+      .text(vitals.exam, { align: 'justify', lineGap: 4 });
+
+    doc.y += 20;
+  }
+}
+
+function renderTextSection(doc, letter, title, content, color) {
+  if (isEmpty(content)) return;
+
+  renderSectionHeader(doc, letter, title, color);
+
+  doc.font(FONTS.regular).fontSize(FONTS.base)
+    .fillColor(COLORS.text.base)
+    .text(Array.isArray(content) ? content.join('\n') : content, {
+      align: 'justify',
+      lineGap: 4
+    });
+
+  doc.y += 20;
+}
+
+function renderListSection(doc, letter, title, items, color, type = 'bullet') {
+  if (isEmpty(items)) return;
+  const list = Array.isArray(items) ? items : [items];
+  if (list.length === 0) return;
+
+  renderSectionHeader(doc, letter, title, color);
+
+  list.forEach(item => {
+    if (type === 'pill') {
+      // Just list them roughly? No, renderList usually expects lines.
+      // Let's stick to bullets for Plans/Interventions as they are often sentences
+    }
+
+    const startY = doc.y;
+
+    // Custom Bullet
+    if (type === 'check') {
+      doc.font(FONTS.bold).fontSize(FONTS.base).fillColor(COLORS.success).text("✓", CONFIG.margins.left, startY);
+    } else {
+      doc.circle(CONFIG.margins.left + 3, startY + 6, 2).fillColor(color).fill();
+    }
+
+    // Text
+    doc.font(FONTS.regular).fontSize(FONTS.base)
+      .fillColor(COLORS.text.base)
+      .text(item, CONFIG.margins.left + 15, startY, {
+        width: CONFIG.width - CONFIG.margins.left - CONFIG.margins.right - 15,
+        lineGap: 4
       });
 
-    // Droite : Infirmière
+    doc.y += 6; // item gap
+  });
+
+  doc.y += 20;
+}
+
+function renderFooter(doc, user) {
+  const pages = doc.bufferedPageRange();
+  for (let i = 0; i < pages.count; i++) {
+    doc.switchToPage(i);
+
+    const bottomY = CONFIG.height - CONFIG.margins.bottom + 20;
+
+    doc.moveTo(CONFIG.margins.left, bottomY - 10)
+      .lineTo(CONFIG.width - CONFIG.margins.right, bottomY - 10)
+      .lineWidth(0.5)
+      .strokeColor(COLORS.border)
+      .stroke();
+
+    doc.font(FONTS.regular).fontSize(FONTS.xs)
+      .fillColor(COLORS.text.muted)
+      .text("Généré par KadduCare AI", CONFIG.margins.left, bottomY);
+
     if (user && user.full_name) {
-      doc.fontSize(8)
-        .fillColor(COLORS.textMuted)
-        .text(`Infirmier(ère): ${user.full_name}`, MARGINS.left, footerY, {
-          width: doc.page.width - MARGINS.left - MARGINS.right,
-          align: 'right'
-        });
+      doc.text(`Praticien: ${user.full_name}`, CONFIG.margins.left, bottomY, {
+        align: 'right',
+        width: CONFIG.width - CONFIG.margins.left - CONFIG.margins.right
+      });
     }
+
+    doc.text(`${i + 1} / ${pages.count}`, CONFIG.margins.left, bottomY, {
+      align: 'center',
+      width: CONFIG.width - CONFIG.margins.left - CONFIG.margins.right
+    });
   }
 }
 
 // ============================================================================
-// GÉNÉRATEUR PRINCIPAL
+// MAIN GENERATOR
 // ============================================================================
 
 async function generatePDF({
   patient,
-  transcriptionText,
   structuredJson,
   recordedAt,
   createdAt,
-  user,
-  mode = 'complet',
-  noteId = null,
-  patientId = null
+  user
 }) {
-  try {
-    if (!structuredJson || !structuredJson.soapie) {
-      throw new Error('Missing structured data');
-    }
+  return new Promise((resolve, reject) => {
+    try {
+      if (!structuredJson || !structuredJson.soapie) {
+        throw new Error("Données structurées manquantes");
+      }
 
-    const patientFromForm = structuredJson?.patient || {};
-    const patientFromParam = patient || {};
+      const soapie = structuredJson.soapie;
+      const patientData = { ...patient, ...structuredJson.patient };
 
-    const isValid = (v) => v && String(v).trim() !== '';
+      const tempDir = os.tmpdir();
+      const fileName = `KADDU-${Date.now()}.pdf`;
+      const filePath = path.join(tempDir, fileName);
 
-    const patientData = {
-      full_name: isValid(patientFromForm.full_name)
-        ? patientFromForm.full_name
-        : (isValid(patientFromParam.full_name) ? patientFromParam.full_name : 'Patient Inconnu'),
-      age: isValid(patientFromForm.age)
-        ? patientFromForm.age
-        : (isValid(patientFromParam.age) ? patientFromParam.age : (patientFromParam.dob ? calculateAge(patientFromParam.dob) : '')),
-      gender: isValid(patientFromForm.gender)
-        ? patientFromForm.gender
-        : (patientFromParam.gender || ''),
-      room_number: isValid(patientFromForm.room_number)
-        ? patientFromForm.room_number
-        : (patientFromParam.room_number || ''),
-      unit: isValid(patientFromForm.unit)
-        ? patientFromForm.unit
-        : (patientFromParam.unit || '')
-    };
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: CONFIG.margins,
+        bufferPages: true,
+        autoFirstPage: true
+      });
 
-    const soapie = structuredJson.soapie;
+      const stream = fs.createWriteStream(filePath);
+      doc.pipe(stream);
 
-    const tempDir = os.tmpdir();
-    const fileName = `KADDU-${Date.now()}.pdf`;
-    const filePath = path.join(tempDir, fileName);
+      // 1. Header
+      renderHeader(doc, recordedAt, createdAt);
 
-    const doc = new PDFDocument({
-      size: 'A4',
-      margins: { top: 0, bottom: 0, left: 0, right: 0 },
-      bufferPages: true
-    });
+      // 2. Patient
+      renderPatientInfo(doc, patientData);
 
-    const stream = fs.createWriteStream(filePath);
-    doc.pipe(stream);
+      // 3. SOAPIE Body
+      renderTextSection(doc, 'S', 'Subjectif', soapie.S, COLORS.sections.S);
 
-    const contentWidth = doc.page.width - MARGINS.left - MARGINS.right;
+      // 4. Objectif (Special Handling)
+      if (soapie.O) {
+        renderVitals(doc, soapie.O);
+        // Note: Exam physique handled inside renderVitals for O section context
+      }
 
-    // 1. Header
-    renderHeader(doc, recordedAt, createdAt);
+      renderTextSection(doc, 'A', 'Analyse', soapie.A, COLORS.sections.A);
+      renderListSection(doc, 'P', 'Plan de Soins', soapie.P, COLORS.sections.P, 'check');
+      renderListSection(doc, 'I', 'Interventions', soapie.I, COLORS.sections.I, 'bullet');
+      renderTextSection(doc, 'E', 'Évaluation', soapie.E, COLORS.sections.E);
 
-    // 2. Carte Patient
-    renderPatientCard(doc, patientData, contentWidth);
+      // 5. Footer
+      renderFooter(doc, user);
 
-    // 3. Sections SOAPIE
-    if (!isEmpty(soapie.S)) renderSubjective(doc, soapie.S, contentWidth);
-    if (soapie.O) renderObjective(doc, soapie.O, contentWidth);
-    if (!isEmpty(soapie.A)) renderAnalysis(doc, soapie.A, contentWidth);
-    if (!isEmpty(soapie.P)) renderPlan(doc, soapie.P, contentWidth);
-    if (!isEmpty(soapie.I)) renderIntervention(doc, soapie.I, contentWidth);
-    if (!isEmpty(soapie.E)) renderEvaluation(doc, soapie.E, contentWidth);
+      doc.end();
 
-    // 4. Footer
-    renderFooter(doc, user);
-
-    doc.end();
-
-    return new Promise((resolve, reject) => {
       stream.on('finish', () => resolve(filePath));
-      stream.on('error', reject);
-    });
+      stream.on('error', (err) => reject(err));
 
-  } catch (error) {
-    console.error('PDF Gen Error:', error);
-    throw error;
-  }
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 module.exports = { generatePDF };
