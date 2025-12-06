@@ -31,17 +31,36 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   // Créer un preset personnalisé pour enregistrer en WAV (format privilégié)
   // Configuration optimisée pour WAV avec les paramètres requis par Whisper
+  // Configuration "Gold Standard" pour la dictée vocale AI (Whisper/Gemini)
+  // Format: AAC (m4a) @ 64kbps, 16kHz, Mono
+  // Optimisations: Voice Communication (Echo Cancellation, Noise Suppression)
   const customPreset = {
     ...RecordingPresets.HIGH_QUALITY,
-    // Configuration spécifique pour WAV
-    // Format: WAV PCM 16-bit, 16 kHz, Mono (compatible Whisper)
-    sampleRate: 16000, // 16 kHz comme requis par Whisper
-    numberOfChannels: 1, // Mono
-    bitRate: 256000, // 256 kbps pour une bonne qualité
-    // Note: expo-audio peut ne pas supporter WAV directement sur toutes les plateformes
-    // iOS: peut utiliser .m4a (AAC) par défaut
-    // Android: peut utiliser .wav si le codec PCM est disponible
-    // Le backend convertira automatiquement en WAV si nécessaire
+    android: {
+      extension: '.m4a',
+      outputFormat: 2, // MPEG_4
+      audioEncoder: 3, // AAC
+      sampleRate: 16000,
+      numberOfChannels: 1,
+      bitRate: 64000, // 64 kbps (suffisant pour la voix, upload rapide)
+      // Source 7 = VOICE_COMMUNICATION (Active Echo Cancellation & Noise Suppression)
+      audioSource: 7,
+    },
+    ios: {
+      extension: '.m4a',
+      outputFormat: 'mpeg4aac', // kAudioFormatMPEG4AAC
+      audioQuality: 3, // High
+      sampleRate: 16000,
+      numberOfChannels: 1,
+      bitRate: 64000,
+      linearPCMBitDepth: 16,
+      linearPCMIsBigEndian: false,
+      linearPCMIsFloat: false,
+    },
+    web: {
+      mimeType: 'audio/webm;codecs=opus',
+      bitsPerSecond: 64000,
+    },
   } as any;
 
   // Créer le recorder avec le hook expo-audio
@@ -126,17 +145,18 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         playsInSilentMode: false,
       });
 
-      // Préparer l'enregistrement avec les options WAV
-      console.log('📝 Préparation de l\'enregistrement en format WAV...');
+      // Préparer l'enregistrement avec les options AAC (Optimisé AI)
+      console.log('📝 Préparation de l\'enregistrement (AAC 16kHz)...');
       console.log('📋 Configuration:', {
         sampleRate: 16000,
-        numberOfChannels: 1,
-        bitRate: 256000,
+        channels: 1,
+        bitRate: 64000,
+        source: 'Voice Communication (Echo/Noise Filter)'
       });
       await recorder.prepareToRecordAsync();
 
       // Démarrer l'enregistrement
-      console.log('▶️ Démarrage effectif de l\'enregistrement...');
+      console.log('▶️ Démarrage effectif...');
       recorder.record();
       console.log('✅ Enregistrement démarré');
     } catch (err: any) {
@@ -202,8 +222,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
       if (uri) {
         console.log('✅ URI de l\'enregistrement récupérée:', uri);
-        const isWav = uri.toLowerCase().endsWith('.wav');
-        console.log('📁 Format détecté:', isWav ? 'WAV ✅' : 'Autre format (sera converti en WAV par le backend)');
+        const isM4a = uri.toLowerCase().endsWith('.m4a');
+        console.log('📁 Format détecté:', isM4a ? 'AAC/M4A ✅' : 'Autre format (sera converti par le backend)');
         setRecordingUri(uri);
         return uri;
       }
