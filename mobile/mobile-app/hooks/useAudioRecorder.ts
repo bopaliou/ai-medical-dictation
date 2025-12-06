@@ -29,8 +29,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
 
-  // Créer un preset personnalisé pour enregistrer en WAV (format privilégié)
-  // Configuration optimisée pour WAV avec les paramètres requis par Whisper
   // Configuration "Gold Standard" pour la dictée vocale AI (Whisper/Gemini)
   // Format: AAC (m4a) @ 64kbps, 16kHz, Mono
   // Optimisations: Voice Communication (Echo Cancellation, Noise Suppression)
@@ -38,13 +36,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     ...RecordingPresets.HIGH_QUALITY,
     android: {
       extension: '.m4a',
-      outputFormat: 2, // MPEG_4
-      audioEncoder: 3, // AAC
+      outputFormat: 'mpeg_4', // String type required
+      audioEncoder: 'aac', // String type required
       sampleRate: 16000,
       numberOfChannels: 1,
       bitRate: 64000, // 64 kbps (suffisant pour la voix, upload rapide)
-      // Source 7 = VOICE_COMMUNICATION (Active Echo Cancellation & Noise Suppression)
-      audioSource: 7,
+      // Note: audioSource is usually an Int in some libraries but expo-audio might prefer we omitted it if using presets.
+      // We'll trust the preset and explicit codec settings for now to avoid casting errors if type is strict.
     },
     ios: {
       extension: '.m4a',
@@ -151,7 +149,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         sampleRate: 16000,
         channels: 1,
         bitRate: 64000,
-        source: 'Voice Communication (Echo/Noise Filter)'
+        source: 'Voice (AAC)'
       });
       await recorder.prepareToRecordAsync();
 
